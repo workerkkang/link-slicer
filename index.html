@@ -585,7 +585,51 @@
 
   btnGen.addEventListener('click', generateHTML);
   btnRegen.addEventListener('click', generateHTML);
-  btnPreview.addEventListener('click', ()=> alert('미리보기가 아래에 표시되었습니다.'));
+  
+btnPreview.addEventListener('click', () => {
+  if (!codeTA.value.trim()) {
+    alert('HTML을 먼저 생성해주세요.');
+    return;
+  }
+
+  const win = window.open('', '_blank');
+  if (!win) {
+    alert('팝업이 차단되었습니다. 브라우저 설정에서 허용해주세요.');
+    return;
+  }
+
+  const htmlDoc = `
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Link Slicer Preview (${segMode})</title>
+<style>
+body { margin:0; padding:20px; font-family:system-ui, sans-serif; background:#fafafa; }
+a { text-decoration:none; }
+img { display:block; max-width:100%; height:auto; margin:0 auto; border:none; }
+.container { max-width:800px; margin:0 auto; }
+.notice { font-size:13px; color:#888; text-align:center; margin-bottom:10px; }
+</style>
+</head>
+<body>
+<div class="notice">미리보기 모드 – 링크 클릭 시 새 탭으로 열립니다</div>
+<div class="container">
+${codeTA.value
+  .replace(/<!--[\s\S]*?-->/g, '')   // 주석 제거
+  .replace(/^<div[^>]*>|<\/div>$/g, '') // 래퍼 div 제거
+}
+</div>
+</body>
+</html>`;
+
+  win.document.open();
+  win.document.write(htmlDoc);
+  win.document.close();
+});
+
+  
   btnCopy.addEventListener('click', async ()=>{
     try{ await navigator.clipboard.writeText(codeTA.value); btnCopy.textContent="복사됨"; setTimeout(()=>btnCopy.textContent="코드 복사",1200); }
     catch{ codeTA.select(); document.execCommand("copy"); btnCopy.textContent="복사됨"; setTimeout(()=>btnCopy.textContent="코드 복사",1200); }
@@ -689,3 +733,4 @@
 </script>
 </body>
 </html>
+

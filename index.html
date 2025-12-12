@@ -326,7 +326,7 @@
     let startClient=0, startPerc=obj.perc;
 
     // 선 클릭이 overlay 클릭으로 전파되어 "추가 생성"되는 문제 방지
-    el.addEventListener('click', (e)=> { if(!e.altKey) e.stopPropagation(); });
+    el.addEventListener('click', (e)=> { if (!e.altKey) e.stopPropagation(); });
 
     el.addEventListener('mousedown', (e)=>{
       if(locked || !isVisibleByMode(obj)) return;
@@ -912,6 +912,7 @@ ${codeTA.value
 </script>
 </body>
 </html>
+
 
 
 

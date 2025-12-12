@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Link Slicer – 모드별 독립 동작/세그먼트 고정</title>
+<title>Link Slicer – 모드 독립(라인+링크 분리 저장)</title>
 <style>
   :root{ --border:#cfd4dc; --muted:#6b7280; --accent:#ff4d4f; --bg:#f7f9fc; --panel:#ffffff; }
   *{box-sizing:border-box}
@@ -77,8 +77,8 @@
         • 세로: 클릭=세로선만 (Shift 무시)<br>
         • 가로×세로: 클릭=가로, Shift=세로</li>
       <li>Alt+클릭=가까운(표시중인) 선 삭제, 드래그=이동</li>
-      <li>행/열 숫자 입력 후 “균등분할 적용”으로 자동 배치</li>
-      <li>우측에서 링크 입력 → HTML 생성/복사</li>
+      <li>행/열 입력 후 “균등분할 적용”</li>
+      <li>우측 링크 입력 → HTML 생성/복사</li>
     </ol>
     <div id="dropzone">
       <div style="font-weight:600; margin-bottom:4px;">이미지 업로드</div>
@@ -87,7 +87,7 @@
       <input id="fileInput" type="file" accept="image/*">
     </div>
   </div>
-  <footer>모드별 선/세그먼트는 서로 독립적으로 동작합니다.</footer>
+  <footer>라인/링크/세그먼트가 모드별로 완전 독립적으로 동작합니다.</footer>
 </aside>
 
 <main id="main">
@@ -182,9 +182,13 @@
   const lineColor = document.getElementById('lineColor');
   const lineThickness = document.getElementById('lineThickness');
 
-  let lines = []; // { type: 'h'|'v', perc: 0..1, el }
+  // 라인: { type:'h'|'v', perc:0..1, el:HTMLElement, origin:'h'|'v'|'grid' }
+  let lines = [];
   let naturalW = 0, naturalH = 0;
-  let segLinks = [];
+
+  // 모드별 링크 독립 저장
+  let linkStore = { h: [], v: [], grid: [] };
+
   let thumbRAF = null;
   let segMode = 'h';
   let uniformRows = 3, uniformCols = 3;
@@ -198,11 +202,7 @@
   function displaySize(){ return { w: overlay.clientWidth, h: overlay.clientHeight }; }
   function syncOverlaySize(){ overlay.style.width=image.clientWidth+'px'; overlay.style.height=image.clientHeight+'px'; }
 
-  function isVisibleByMode(l){
-    if(segMode==='h') return l.type==='h';
-    if(segMode==='v') return l.type==='v';
-    return true; // grid
-  }
+  function isVisibleByMode(l){ return l.origin === segMode; }
 
   function applyStyle(el, type){
     el.style.background = styleColor;
@@ -222,7 +222,6 @@
         l.el.style.left=(l.perc*w - styleThickness/2) + 'px';
       }
       applyStyle(l.el, l.type);
-      // 표시/포인터 이벤트: 현재 모드 외 선은 보이지 않게 + 클릭 영향 제거
       const visible = isVisibleByMode(l);
       l.el.style.display = visible ? '' : 'none';
       l.el.style.cursor = visible ? (locked ? 'default' : 'move') : 'default';
@@ -231,8 +230,10 @@
   }
 
   function getPercsSorted(type){
-    // 보이는 선만 세그먼트에 사용 (모드 전환 시 비가시 선은 자동 무시)
-    return lines.filter(l=>l.type===type && isVisibleByMode(l)).map(l=>l.perc).sort((a,b)=>a-b);
+    return lines
+      .filter(l=>l.origin===segMode && l.type===type)
+      .map(l=>l.perc)
+      .sort((a,b)=>a-b);
   }
 
   function markDirty(){
@@ -267,10 +268,10 @@
     return {x,y,w,h, inside:x>=0&&y>=0&&x<=w&&y<=h};
   }
 
-  function createLine(type, perc){
+  function createLine(type, perc, origin){
     const el = document.createElement('div');
     overlay.appendChild(el);
-    const obj = {type, perc: Math.max(0, Math.min(1, perc)), el};
+    const obj = {type, perc: Math.max(0, Math.min(1, perc)), el, origin};
     lines.push(obj);
     applyStyle(el, type);
     layoutLines();
@@ -291,7 +292,11 @@
           const pxTol = snapPx;
           const currPx = (type==='h') ? next*h : next*w;
           let snapTargets = [0, (type==='h')?h:w];
-          lines.forEach(l=>{ if(l!==obj && l.type===type && isVisibleByMode(l)) snapTargets.push((type==='h')? l.perc*h : l.perc*w); });
+          lines.forEach(l=>{
+            if(l!==obj && l.type===type && l.origin===segMode) {
+              snapTargets.push((type==='h')? l.perc*h : l.perc*w);
+            }
+          });
           let best = currPx, bestDist = Infinity;
           for(const t of snapTargets){
             const dist = Math.abs(currPx - t);
@@ -302,7 +307,7 @@
 
         obj.perc = next;
         layoutLines();
-        if(segMode==='h'&&type==='h' || segMode==='v'&&type==='v' || segMode==='grid') scheduleThumbs();
+        scheduleThumbs();
         markDirty();
       };
       const onUp=()=>{ dragging=false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); updateSegmentsUI(false); };
@@ -312,19 +317,17 @@
   }
 
   function deleteNearest(x,y){
-    // 삭제도 현재 모드에서 "표시중"인 선만 대상
     const {w,h}=displaySize();
     let nearest=null, dist=Infinity;
     lines.forEach(l=>{
-      if(!isVisibleByMode(l)) return;
+      if(l.origin!==segMode) return;
       const d=(l.type==='h')?Math.abs(l.perc*h-y):Math.abs(l.perc*w-x);
       if(d<dist){dist=d; nearest=l;}
     });
     if(nearest){
       nearest.el.remove();
-      const t=nearest.type;
       lines = lines.filter(l=>l!==nearest);
-      if(segMode==='grid' || segMode===t) updateSegmentsUI(true);
+      updateSegmentsUI(true);
       markDirty();
     }
   }
@@ -333,55 +336,69 @@
     if(!image.src) return;
     const p=pointerInOverlay(e); if(!p.inside) return;
 
-    // Alt 삭제: 표시중인 선만
     if(e.altKey){ deleteNearest(p.x,p.y); return; }
 
-    // 모드별 추가 정책
     if(segMode==='h'){
-      // 가로 모드: 클릭=가로선만, Shift 입력 무시
       if(e.shiftKey) return;
-      createLine('h', p.y/p.h);
+      createLine('h', p.y/p.h, 'h');
       return;
     }
     if(segMode==='v'){
-      // 세로 모드: 클릭=세로선만, Shift 입력 무시
       if(e.shiftKey) return;
-      createLine('v', p.x/p.w);
+      createLine('v', p.x/p.w, 'v');
       return;
     }
-    // grid: 클릭=가로, Shift=세로
     const addType = e.shiftKey ? 'v' : 'h';
-    if(addType==='h') createLine('h', p.y/p.h); else createLine('v', p.x/p.w);
+    if(addType==='h') createLine('h', p.y/p.h, 'grid'); else createLine('v', p.x/p.w, 'grid');
   });
 
-  // 모드 전환: 비가시 선 자동 무시 + 세그먼트 재계산 고정(해당 모드 기준으로만)
+  // === 링크 저장 보조: 현재 모드 배열 길이 보장 ===
+  function ensureLinkStoreSize(len){
+    const arr = linkStore[segMode];
+    if(arr.length < len){
+      for(let i=arr.length;i<len;i++) arr.push("");
+    }else if(arr.length > len){
+      arr.length = len; // 초과분 잘라내기
+    }
+  }
+
+  // 모드 전환 시: 해당 모드 라인만 보이도록, 링크 UI는 해당 모드 linkStore 사용
   modeRadios.forEach(r=>r.addEventListener('change', ()=>{
     segMode = [...modeRadios].find(x=>x.checked).value; // 'h'|'v'|'grid'
-    layoutLines();          // 가시/비가시 반영
-    updateSegmentsUI(true); // 현재 모드 선만으로 조각 재계산
+    layoutLines();
+    updateSegmentsUI(true); // 현재 모드 기준으로 조각/링크 UI 재구성
     markDirty();
   }));
 
-  function rebuildUniform(type, count){
-    // 내부 선은 count-1개. 현재 타입만 건드림(다른 타입 선은 유지되어 다른 모드에서 재사용 가능)
-    lines.filter(l=>l.type===type).forEach(l=>l.el.remove());
-    lines = lines.filter(l=>l.type!==type);
-    if(count<=1){ layoutLines(); updateSegmentsUI(true); return; }
-    const cuts = count - 1;
-    for(let i=1;i<=cuts;i++){ createLine(type, i/count); }
+  // 균등분할: 현재 모드(origin=segMode)의 타입만 재구성
+  function rebuildUniformForMode(rows, cols){
+    if(segMode==='h'){
+      lines.filter(l=>l.origin==='h' && l.type==='h').forEach(l=>l.el.remove());
+      lines = lines.filter(l=>!(l.origin==='h' && l.type==='h'));
+      const count = Math.max(1, rows|0);
+      for(let i=1;i<=count-1;i++) createLine('h', i/count, 'h');
+    }else if(segMode==='v'){
+      lines.filter(l=>l.origin==='v' && l.type==='v').forEach(l=>l.el.remove());
+      lines = lines.filter(l=>!(l.origin==='v' && l.type==='v'));
+      const count = Math.max(1, cols|0);
+      for(let i=1;i<=count-1;i++) createLine('v', i/count, 'v');
+    }else{ // grid
+      lines.filter(l=>l.origin==='grid').forEach(l=>l.el.remove());
+      lines = lines.filter(l=>!(l.origin==='grid'));
+      const rCnt = Math.max(1, rows|0), cCnt = Math.max(1, cols|0);
+      for(let i=1;i<=rCnt-1;i++) createLine('h', i/rCnt, 'grid');
+      for(let j=1;j<=cCnt-1;j++) createLine('v', j/cCnt, 'grid');
+    }
     layoutLines();
     updateSegmentsUI(true);
+    scheduleThumbs(); markDirty();
   }
 
   btnUniform.addEventListener('click', ()=>{
     const rows = Math.max(1, parseInt(rowsInput.value||'1',10));
     const cols = Math.max(1, parseInt(colsInput.value||'1',10));
     uniformRows = rows; uniformCols = cols;
-
-    if(segMode==='h'){ rebuildUniform('h', rows); }
-    else if(segMode==='v'){ rebuildUniform('v', cols); }
-    else { rebuildUniform('h', rows); rebuildUniform('v', cols); }
-    scheduleThumbs(); markDirty();
+    rebuildUniformForMode(rows, cols);
   });
 
   // 옵션
@@ -391,19 +408,13 @@
   lineColor.addEventListener('input', ()=>{ styleColor = lineColor.value || '#ff4d4f'; layoutLines(); });
   lineThickness.addEventListener('input', ()=>{ styleThickness = Math.max(1, parseInt(lineThickness.value||'2',10)); layoutLines(); });
 
-  // 리사이즈 시 위치 재계산(표시중 선만)
   const ro=new ResizeObserver(()=>{ syncOverlaySize(); layoutLines(); scheduleThumbs(); });
   ro.observe(image); ro.observe(stage);
 
-  // “선 모두 삭제” → 현재 모드의 선만 삭제 (다른 모드 선은 보존)
+  // “선 모두 삭제” → 현재 모드(origin=segMode)의 선만 삭제
   btnClearLines.addEventListener('click', ()=>{
-    const shouldRemove = (l)=>{
-      if(segMode==='h') return l.type==='h';
-      if(segMode==='v') return l.type==='v';
-      return true; // grid
-    };
-    lines.filter(shouldRemove).forEach(l=>l.el.remove());
-    lines = lines.filter(l=>!shouldRemove(l));
+    lines.filter(l=>l.origin===segMode).forEach(l=>l.el.remove());
+    lines = lines.filter(l=>l.origin!==segMode);
     updateSegmentsUI(true);
     markDirty();
   });
@@ -411,14 +422,13 @@
   function scheduleThumbs(){ if(thumbRAF) cancelAnimationFrame(thumbRAF); thumbRAF=requestAnimationFrame(renderThumbnails); }
 
   function updateSegmentsUI(regenThumbs){
-    // 현재 모드의 "가시 선"만 조각 계산에 사용
     let rows=1, cols=1, hCuts=[], vCuts=[];
     if(segMode==='h'){ hCuts=getPercsSorted('h'); rows=hCuts.length+1; cols=1; }
     else if(segMode==='v'){ vCuts=getPercsSorted('v'); rows=1; cols=vCuts.length+1; }
     else{ hCuts=getPercsSorted('h'); vCuts=getPercsSorted('v'); rows=hCuts.length+1; cols=vCuts.length+1; }
 
-    const prev = segLinks.slice();
-    segLinks = Array.from({length:rows*cols}, (_,i)=> prev[i] ?? "");
+    const total = rows*cols;
+    ensureLinkStoreSize(total); // 현재 모드 linkStore 크기 맞춤
 
     segmentsWrap.innerHTML="";
     for(let r=0;r<rows;r++){
@@ -438,8 +448,11 @@
         left.appendChild(meta);
 
         const input = document.createElement('input');
-        input.type='url'; input.placeholder='https:// 링크 입력'; input.value=segLinks[idx];
-        input.addEventListener('input', ev=>{ segLinks[idx]=ev.target.value.trim(); markDirty(); });
+        input.type='url'; input.placeholder='https:// 링크 입력'; input.value=linkStore[segMode][idx] || "";
+        input.addEventListener('input', ev=>{
+          linkStore[segMode][idx] = ev.target.value.trim();
+          markDirty();
+        });
 
         row.appendChild(left); row.appendChild(input);
         segmentsWrap.appendChild(row);
@@ -552,8 +565,9 @@
       }
     }
 
+    const currentLinks = linkStore[segMode];
     const pieces = dataURLs.map((src,i)=>{
-      const href = segLinks[i] || "#";
+      const href = currentLinks[i] || "#";
       return `<a href="${href}" target="_blank" style="display:block;line-height:0;"><img src="${src}" alt="slice-${i+1}" style="display:block;width:100%;height:auto;border:0;"/></a>`;
     }).join("\n");
 
@@ -562,7 +576,7 @@
 
     preview.innerHTML="";
     dataURLs.forEach((src,i)=>{
-      const a=document.createElement('a'); a.href=segLinks[i]||"#"; a.target="_blank";
+      const a=document.createElement('a'); a.href=currentLinks[i]||"#"; a.target="_blank";
       const im=document.createElement('img'); im.src=src; im.alt=`slice-${i+1}`;
       im.style.display="block"; im.style.width="100%"; im.style.height="auto";
       a.appendChild(im); preview.appendChild(a);
@@ -581,9 +595,10 @@
     const c=document.createElement('canvas'); c.width=naturalW; c.height=naturalH;
     c.getContext('2d').drawImage(image,0,0); return c.toDataURL('image/png');
   }
+
   function buildState(){
     return {
-      version: 7,
+      version: 9,
       savedAt: new Date().toISOString(),
       mode: segMode,
       rows: uniformRows,
@@ -593,10 +608,11 @@
       image: imageToDataURL(),
       naturalWidth: naturalW,
       naturalHeight: naturalH,
-      lines: lines.map(l=>({type:l.type, perc:l.perc})),
-      links: segLinks.slice()
+      lines: lines.map(l=>({type:l.type, perc:l.perc, origin:l.origin})),
+      links: linkStore   // << 모드별 링크 전부 저장
     };
   }
+
   function downloadJSON(obj, filename){
     const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
@@ -641,19 +657,29 @@
       snapPx = Math.max(0, parseInt(state.options.snapPx||snapPx,10)); snapTol.value = snapPx;
     }
 
+    // 라인 복원
     lines.forEach(l=>l.el.remove()); lines=[];
-    state.lines?.forEach(l=>createLine(l.type, Math.max(0,Math.min(1,Number(l.perc)||0))));
+    state.lines?.forEach(l=>createLine(l.type, Math.max(0,Math.min(1,Number(l.perc)||0)), l.origin==='h'?'h':l.origin==='v'?'v':'grid'));
     layoutLines();
+
+    // 링크 저장소 복원(모드별)
+    if(state.links && typeof state.links==='object'){
+      linkStore.h  = Array.isArray(state.links.h)    ? state.links.h.slice() : [];
+      linkStore.v  = Array.isArray(state.links.v)    ? state.links.v.slice() : [];
+      linkStore.grid = Array.isArray(state.links.grid)? state.links.grid.slice() : [];
+    }else{
+      linkStore = { h:[], v:[], grid:[] };
+    }
+
     updateSegmentsUI(true);
     scheduleThumbs();
 
-    segLinks = Array.isArray(state.links) ? state.links.slice() : [];
     codeTA.value=""; preview.innerHTML="";
     btnGen.disabled=false; btnRegen.disabled=true; btnCopy.disabled=true; btnPreview.disabled=true;
   }
 
-  function clearLinesUI(){ segmentsWrap.innerHTML=''; segLinks=[]; codeTA.value=''; preview.innerHTML=''; btnPreview.disabled=true; btnCopy.disabled=true; btnGen.disabled=!image.src; }
-  function fullReset(){ lines.forEach(l=>l.el.remove()); lines=[]; clearLinesUI(); btnGen.disabled=false; btnRegen.disabled=true; btnPreview.disabled=true; btnCopy.disabled=true; }
+  function clearLinesUI(){ segmentsWrap.innerHTML=''; codeTA.value=''; preview.innerHTML=''; btnPreview.disabled=true; btnCopy.disabled=true; btnGen.disabled=!image.src; }
+  function fullReset(){ lines.forEach(l=>l.el.remove()); lines=[]; linkStore={h:[],v:[],grid:[]}; clearLinesUI(); btnGen.disabled=false; btnRegen.disabled=true; btnPreview.disabled=true; btnCopy.disabled=true; }
 
   // 초기 상태
   btnGen.disabled=true; btnRegen.disabled=true; btnPreview.disabled=true; btnCopy.disabled=true;

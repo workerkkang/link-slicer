@@ -29,8 +29,8 @@
   #topbar .spacer{ flex:1 }
   .pill{font-size:12px;color:#4b5563}
   .segmode,.uniform,.options,.email{display:flex; align-items:center; gap:10px; border:1px solid var(--border); padding:6px 10px; border-radius:10px; background:#fafafa; }
-  .uniform input,.options input[type="number"], .email input[type="text"]{ width:64px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; }
-  .email input[type="text"]{ width:280px; }
+  .uniform input,.options input[type="number"]{ width:64px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; }
+  .email input[type="text"]{ width:280px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; }
   .hint{font-size:12px; color:#6b7280}
 
   #workarea{ display:grid; grid-template-columns:1fr 420px; gap:14px; padding:14px; min-height:0; flex:1; overflow:hidden; }
@@ -77,7 +77,7 @@
         • 가로: <b>Ctrl+클릭</b>=가로선 추가<br>
         • 세로: <b>Ctrl+클릭</b>=세로선 추가<br>
         • 가로×세로: <b>Ctrl+클릭</b>=가로, <b>Ctrl+Shift+클릭</b>=세로</li>
-      <li>Alt+클릭=가까운(표시중인) 선 삭제, 드래그=이동</li>
+      <li><b>Alt+클릭</b>=가까운(표시중인) 선 삭제, 드래그=이동</li>
       <li>행/열 입력 후 “균등분할 적용”</li>
       <li>우측 링크 입력 → HTML 생성/복사</li>
     </ol>
@@ -164,6 +164,10 @@
 
 <script>
 (() => {
+  // ===== 고정 상수: 가장자리/병합 허용 오차 =====
+  const EDGE_EPS  = 0.002; // 0.2%
+  const MERGE_EPS = 0.002; // 0.2%
+
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('fileInput');
   const stateFile = document.getElementById('stateFile');
@@ -243,11 +247,36 @@
     });
   }
 
-  function getPercsSorted(type){
+  // 원시 컷 가져오기(현재 모드 + 타입)
+  function getPercsRaw(type){
     return lines
       .filter(l=>l.origin===segMode && l.type===type)
-      .map(l=>l.perc)
+      .map(l=>l.perc);
+  }
+
+  // 가장자리 제거 + 근접 병합(정규화 컷 계산)
+  function getCutsNormalized(type){
+    const arr = getPercsRaw(type)
+      .filter(p => p > EDGE_EPS && p < 1-EDGE_EPS) // 가장자리 선 제거
       .sort((a,b)=>a-b);
+
+    const merged = [];
+    for(const p of arr){
+      if(merged.length===0) { merged.push(p); continue; }
+      const last = merged[merged.length-1];
+      if(Math.abs(p - last) <= MERGE_EPS){
+        // 가까우면 평균으로 병합
+        merged[merged.length-1] = (last + p)/2;
+      } else {
+        merged.push(p);
+      }
+    }
+    return merged;
+  }
+
+  // UI/썸네일/HTML 등에서 사용할 "안전한 컷 배열" 반환
+  function getSafeCuts(type){
+    return getCutsNormalized(type);
   }
 
   function markDirty(){
@@ -293,6 +322,7 @@
 
     let startClient=0, startPerc=obj.perc;
 
+    // 선 클릭이 overlay 클릭으로 전파되어 "추가 생성"되는 문제 방지
     el.addEventListener('click', (e)=> e.stopPropagation());
 
     el.addEventListener('mousedown', (e)=>{
@@ -335,13 +365,53 @@
       const onUp=()=>{
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
+
+        // 드래그 완료 후: 가장자리 정규화/근접 병합 반영
+        normalizeAndCleanup(obj.type);
+
         updateSegmentsUI(false);
+        // 드래그 종료 후 click 이벤트가 추가 실행되지 않도록 한 틱 뒤에 플래그 해제
         setTimeout(()=>{ isDragging = false; }, 0);
       };
 
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     });
+  }
+
+  // 현재 모드의 해당 타입(h/v) 라인에 대해 가장자리 제거·근접 병합 후 재적용
+  function normalizeAndCleanup(type){
+    const keep = [];
+    // 현재 모드 + 타입만 추출
+    const subset = lines.filter(l=>l.origin===segMode && l.type===type).sort((a,b)=>a.perc-b.perc);
+    // 가장자리 제외
+    const filtered = subset.filter(l => l.perc > EDGE_EPS && l.perc < 1-EDGE_EPS);
+
+    // 근접 병합
+    for(const l of filtered){
+      if(keep.length===0) { keep.push(l); continue; }
+      const last = keep[keep.length-1];
+      if(Math.abs(l.perc - last.perc) <= MERGE_EPS){
+        last.perc = (last.perc + l.perc)/2;
+        // 중복 라인 DOM 제거
+        l.el.remove();
+        // 전체 목록에서 제거
+        lines = lines.filter(x=>x!==l);
+      }else{
+        keep.push(l);
+      }
+    }
+
+    // 가장자리였던 라인 DOM 제거
+    subset.forEach(l=>{
+      if(l.perc <= EDGE_EPS || l.perc >= 1-EDGE_EPS){
+        l.el.remove();
+        lines = lines.filter(x=>x!==l);
+      }
+    });
+
+    layoutLines();
+    scheduleThumbs();
   }
 
   function deleteNearest(x,y){
@@ -360,7 +430,7 @@
     }
   }
 
-  // 라인 생성: Ctrl(+Shift)+클릭 (드래그 중 클릭 방지)
+  // Alt+클릭 삭제, Ctrl(+Shift)+클릭 생성 (드래그 클릭 방지)
   overlay.addEventListener('click', e=>{
     if(!image.src) return;
     if(e.button !== 0) return;
@@ -407,6 +477,10 @@
       for(let i=1;i<=rCnt-1;i++) createLine('h', i/rCnt, 'grid');
       for(let j=1;j<=cCnt-1;j++) createLine('v', j/cCnt, 'grid');
     }
+    // 재구성 후 가장자리/근접 병합 한번 수행
+    normalizeAndCleanup('h');
+    normalizeAndCleanup('v');
+
     layoutLines();
     updateSegmentsUI(true);
     scheduleThumbs(); markDirty();
@@ -444,9 +518,9 @@
 
   function updateSegmentsUI(regenThumbs){
     let rows=1, cols=1, hCuts=[], vCuts=[];
-    if(segMode==='h'){ hCuts=getPercsSorted('h'); rows=hCuts.length+1; cols=1; }
-    else if(segMode==='v'){ vCuts=getPercsSorted('v'); rows=1; cols=vCuts.length+1; }
-    else{ hCuts=getPercsSorted('h'); vCuts=getPercsSorted('v'); rows=hCuts.length+1; cols=vCuts.length+1; }
+    if(segMode==='h'){ hCuts=getSafeCuts('h'); rows=hCuts.length+1; cols=1; }
+    else if(segMode==='v'){ vCuts=getSafeCuts('v'); rows=1; cols=vCuts.length+1; }
+    else{ hCuts=getSafeCuts('h'); vCuts=getSafeCuts('v'); rows=hCuts.length+1; cols=vCuts.length+1; }
 
     const total = rows*cols;
     ensureLinkStoreSize(total);
@@ -488,8 +562,8 @@
   function renderThumbnails(){
     thumbRAF=null; if(!image.src) return;
 
-    const hPerc=[0,...getPercsSorted('h'),1];
-    const vPerc=[0,...getPercsSorted('v'),1];
+    const hPerc=[0,...getSafeCuts('h'),1];
+    const vPerc=[0,...getSafeCuts('v'),1];
 
     const ys=hPerc.map(p=>Math.round(p*naturalH));
     const xs=vPerc.map(p=>Math.round(p*naturalW));
@@ -563,8 +637,12 @@
   function generateHTML(){
     if(!image.src) return;
 
-    const hPerc=[0,...getPercsSorted('h'),1];
-    const vPerc=[0,...getPercsSorted('v'),1];
+    const hCut = getSafeCuts('h');
+    const vCut = getSafeCuts('v');
+
+    const hPerc=[0,...hCut,1];
+    const vPerc=[0,...vCut,1];
+
     const ys=hPerc.map(p=>Math.round(p*naturalH));
     const xs=vPerc.map(p=>Math.round(p*naturalW));
 
@@ -601,7 +679,7 @@
       }
     }
 
-    // 가로 모드: 1열 n행 테이블
+    // 가로 모드: 1열 n행
     if(segMode==='h'){
       canv.width=naturalW;
       const rowsHtml=[];
@@ -626,7 +704,7 @@
       return;
     }
 
-    // 세로 모드: 1행 n열 테이블(열 너비 % 지정, img width 속성 부여)
+    // 세로 모드: 1행 n열 (열 너비 % 지정 + img width 지정)
     if(segMode==='v'){
       canv.height=naturalH;
       const tds=[];
@@ -641,7 +719,6 @@
 
         const href=(currentLinks[ci]||"").trim();
         const pct = (w / naturalW * 100).toFixed(6);
-        // Outlook 호환: td width, img width 둘 다 지정
         const imgTag=`<img src="${src}" alt="slice-${ci+1}" width="${Math.round(800 * (w/naturalW))}" style="display:block;border:0;width:100%;height:auto;" />`;
         const inner = href ? `<a href="${href}" target="_blank" style="text-decoration:none;">${imgTag}</a>` : imgTag;
         tds.push(`<td width="${pct}%" style="padding:0;border:none;width:${pct}%;vertical-align:top;">${inner}</td>`);
@@ -653,7 +730,7 @@
       return;
     }
 
-    // 그리드 모드: r×c 테이블(열 너비 % 지정)
+    // 그리드 모드: r×c
     if(segMode==='grid'){
       const rows = ys.length-1, cols = xs.length-1;
       const rowsHtml=[];
@@ -739,7 +816,7 @@ ${codeTA.value
 
   function buildState(){
     return {
-      version: 12,
+      version: 13,
       savedAt: new Date().toISOString(),
       mode: segMode,
       rows: uniformRows,
@@ -800,6 +877,10 @@ ${codeTA.value
 
     lines.forEach(l=>l.el.remove()); lines=[];
     state.lines?.forEach(l=>createLine(l.type, Math.max(0,Math.min(1,Number(l.perc)||0)), l.origin==='h'?'h':l.origin==='v'?'v':'grid'));
+    // 복원 후 가장자리/근접 병합 수행
+    normalizeAndCleanup('h');
+    normalizeAndCleanup('v');
+
     layoutLines();
 
     if(state.links && typeof state.links==='object'){
@@ -813,7 +894,7 @@ ${codeTA.value
     updateSegmentsUI(true);
     scheduleThumbs();
 
-    codeTA.value=""; 
+    codeTA.value="";
     btnGen.disabled=false; btnRegen.disabled=true; btnCopy.disabled=true; btnPreview.disabled=true;
   }
 

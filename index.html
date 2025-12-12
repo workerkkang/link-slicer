@@ -87,9 +87,9 @@
 
 <!-- 사이드바 -->
 <aside id="sidebar">
-  <div class="side-header"><h2> [사용법 요약]</h2></div>
+  <div class="side-header"><h2>📌 사용법 요약</h2></div>
   <div class="side-body">
-    <ol style="margin:0;padding-left:18px">
+    <ol style="margin:0;padding-left:20px">
       <li>이미지 업로드(아래 박스에 <b>드래그&드롭</b> 또는 클릭)</li>
       <li>현재 선택한 <b>조각 기준</b>에 따라 선을 추가합니다.<br>
           • 가로/세로: 클릭=해당 방향, Shift=반대 방향<br>
@@ -231,11 +231,9 @@
     el.style.background = styleColor;
     if(type==='h'){
       el.style.height = styleThickness + 'px';
-      el.style.top = (parseFloat(el.style.top)||0) + 'px'; // ensure unit
       el.className='line h-line';
     }else{
       el.style.width  = styleThickness + 'px';
-      el.style.left = (parseFloat(el.style.left)||0) + 'px';
       el.className='line v-line';
     }
     el.style.boxShadow = `0 0 6px ${styleColor}55`;
@@ -339,12 +337,13 @@
       document.addEventListener('mouseup', onUp);
     });
   }
+
   function deleteNearest(x,y){
     if(!lines.length) return;
     const {w,h}=displaySize();
     let nearest=null, dist=Infinity;
     lines.forEach(l=>{
-      if(!isLineVisible(l)) return; // 보이지 않는 선은 삭제 대상 제외
+      if(!isLineVisible(l)) return; // 현재 모드에 보이는 선만 삭제 대상
       const d=(l.type==='h')?Math.abs(l.perc*h-y):Math.abs(l.perc*w-x);
       if(d<dist){dist=d; nearest=l;}
     });
@@ -361,22 +360,29 @@
     if(!image.src) return;
     const p=pointerInOverlay(e); if(!p.inside) return;
 
+    // Alt+클릭: 현재 모드에서 보이는 선만 삭제
     if(e.altKey){ deleteNearest(p.x,p.y); return; }
 
-    let addType = 'h';
-    if(segMode==='h') addType = e.shiftKey? 'v':'h';
-    else if(segMode==='v') addType = e.shiftKey? 'h':'v';
-    else /* grid */ addType = e.shiftKey? 'v':'h';
-
-    if(addType==='h') createLine('h', p.y/p.h);
-    else createLine('v', p.x/p.w);
+    // 현재 모드에서 허용되는 선만 추가
+    // 가로: 무조건 가로선만, 세로: 무조건 세로선만, grid: 클릭=가로, Shift=세로
+    if(segMode==='h'){
+      createLine('h', p.y/p.h);
+      return;
+    }
+    if(segMode==='v'){
+      createLine('v', p.x/p.w);
+      return;
+    }
+    // grid
+    const addType = e.shiftKey ? 'v' : 'h';
+    if(addType==='h') createLine('h', p.y/p.h); else createLine('v', p.x/p.w);
   });
 
   // 라디오 변경 시 보이기/숨기기 및 UI 갱신
   modeRadios.forEach(r=>r.addEventListener('change', ()=>{
     segMode = [...modeRadios].find(x=>x.checked).value; // h|v|grid
-    layoutLines();
-    updateSegmentsUI(true);
+    layoutLines();             // 표시/포인터 이벤트 즉시 반영
+    updateSegmentsUI(true);    // 조각/썸네일도 현재 모드 기준으로
     markDirty();
   }));
 
@@ -396,15 +402,17 @@
   }
 
   btnUniform.addEventListener('click', ()=>{
-    uniformRows = Math.max(1, parseInt(rowsInput.value||'1',10));
-    uniformCols = Math.max(1, parseInt(colsInput.value||'1',10));
+    const rows = Math.max(1, parseInt(rowsInput.value||'1',10));
+    const cols = Math.max(1, parseInt(colsInput.value||'1',10));
+    uniformRows = rows; uniformCols = cols;
+
     if(segMode==='h'){
-      rebuildUniform('h', uniformRows);
+      rebuildUniform('h', rows);
     }else if(segMode==='v'){
-      rebuildUniform('v', uniformCols);
+      rebuildUniform('v', cols);
     }else{
-      rebuildUniform('h', uniformRows);
-      rebuildUniform('v', uniformCols);
+      rebuildUniform('h', rows);
+      rebuildUniform('v', cols);
     }
     scheduleThumbs(); markDirty();
   });
@@ -427,9 +435,15 @@
   const ro=new ResizeObserver(()=>{ syncOverlaySize(); layoutLines(); scheduleThumbs(); });
   ro.observe(image); ro.observe(stage);
 
+  // “선 모두 삭제” → 현재 모드의 선만 삭제
   btnClearLines.addEventListener('click', ()=>{
-    lines.forEach(l=>l.el.remove());
-    lines=[];
+    const shouldRemove = (l)=>{
+      if(segMode==='h') return l.type==='h';
+      if(segMode==='v') return l.type==='v';
+      return true; // grid
+    };
+    lines.filter(shouldRemove).forEach(l=>l.el.remove());
+    lines = lines.filter(l=>!shouldRemove(l));
     updateSegmentsUI(true);
     markDirty();
   });
@@ -613,7 +627,7 @@
   }
   function buildState(){
     return {
-      version: 5,
+      version: 6,
       savedAt: new Date().toISOString(),
       mode: segMode,
       rows: uniformRows,
@@ -675,11 +689,11 @@
 
     lines.forEach(l=>l.el.remove()); lines=[];
     state.lines?.forEach(l=>createLine(l.type, Math.max(0,Math.min(1,Number(l.perc)||0))));
-    segLinks = Array.isArray(state.links) ? state.links.slice() : [];
     layoutLines();
     updateSegmentsUI(true);
     scheduleThumbs();
 
+    segLinks = Array.isArray(state.links) ? state.links.slice() : [];
     codeTA.value=""; preview.innerHTML="";
     btnGen.disabled=false; btnRegen.disabled=true; btnCopy.disabled=true; btnPreview.disabled=true;
   }
@@ -696,4 +710,3 @@
 </script>
 </body>
 </html>
-

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Link Slicer – 모드 독립(라인+링크 분리 저장)</title>
+<title>Link Slicer – Outlook Email Ready</title>
 <style>
   :root{ --border:#cfd4dc; --muted:#6b7280; --accent:#ff4d4f; --bg:#f7f9fc; --panel:#ffffff; }
   *{box-sizing:border-box}
@@ -28,8 +28,9 @@
   #topbar button.primary{ border-color:#dbe3ff; background:#eef3ff }
   #topbar .spacer{ flex:1 }
   .pill{font-size:12px;color:#4b5563}
-  .segmode,.uniform,.options{display:flex; align-items:center; gap:10px; border:1px solid var(--border); padding:6px 10px; border-radius:10px; background:#fafafa; }
-  .uniform input,.options input[type="number"]{ width:64px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; }
+  .segmode,.uniform,.options,.email{display:flex; align-items:center; gap:10px; border:1px solid var(--border); padding:6px 10px; border-radius:10px; background:#fafafa; }
+  .uniform input,.options input[type="number"], .email input[type="text"]{ width:64px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; }
+  .email input[type="text"]{ width:280px; }
   .hint{font-size:12px; color:#6b7280}
 
   #workarea{ display:grid; grid-template-columns:1fr 420px; gap:14px; padding:14px; min-height:0; flex:1; overflow:hidden; }
@@ -56,7 +57,7 @@
   .segrow input{ width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:8px; }
 
   #codebox{ padding:12px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:8px; }
-  #code{ width:100%; min-height:120px; border:1px solid var(--border); border-radius:8px; padding:10px; font-family:ui-monospace,Consolas,monospace; }
+  #code{ width:100%; min-height:160px; border:1px solid var(--border); border-radius:8px; padding:10px; font-family:ui-monospace,Consolas,monospace; }
 
   /* 페이지 내 미리보기 숨김(새 탭만 사용) */
   #previewwrap{ display:none; }
@@ -73,8 +74,8 @@
     <ol style="margin:0;padding-left:20px">
       <li>이미지 업로드(아래 박스에 <b>드래그&드롭</b> 또는 클릭)</li>
       <li>조각 기준에 따라 선 추가<br>
-        • 가로: <b>Ctrl+클릭</b>=가로선 추가 (Shift 무시)<br>
-        • 세로: <b>Ctrl+클릭</b>=세로선 추가 (Shift 무시)<br>
+        • 가로: <b>Ctrl+클릭</b>=가로선 추가<br>
+        • 세로: <b>Ctrl+클릭</b>=세로선 추가<br>
         • 가로×세로: <b>Ctrl+클릭</b>=가로, <b>Ctrl+Shift+클릭</b>=세로</li>
       <li>Alt+클릭=가까운(표시중인) 선 삭제, 드래그=이동</li>
       <li>행/열 입력 후 “균등분할 적용”</li>
@@ -87,7 +88,7 @@
       <input id="fileInput" type="file" accept="image/*">
     </div>
   </div>
-  <footer>라인/링크/세그먼트가 모드별로 완전 독립적으로 동작합니다.</footer>
+  <footer>라인/링크/세그먼트가 모드별로 독립 동작합니다.</footer>
 </aside>
 
 <main id="main">
@@ -116,7 +117,22 @@
       <label><input id="snapToggle" type="checkbox" checked> 스냅</label>
       스냅(px): <input id="snapTol" type="number" min="0" value="8">
       색상: <input id="lineColor" type="color" value="#ff4d4f">
-      두께(px): <input id="lineThickness" type="number" min="1" value="3">
+      두께(px): <input id="lineThickness" type="number" min="1" value="2">
+    </div>
+
+    <div class="email" title="Outlook 호환 이메일 모드">
+      <label><input id="emailMode" type="checkbox"> 이메일 모드(Outlook)</label>
+      <label>
+        참조 방식:
+        <select id="emailImgRef">
+          <option value="url" selected>URL</option>
+          <option value="cid">CID(첨부)</option>
+        </select>
+      </label>
+      <label id="baseLabel">이미지 URL 접두어:
+        <input id="emailBase" type="text" placeholder="https://cdn.example.com/newsletter">
+      </label>
+      <div class="hint">이메일 모드: data:URL 미사용. URL 또는 CID로만 삽입</div>
     </div>
 
     <span class="spacer"></span>
@@ -141,10 +157,6 @@
       <div id="codebox">
         <button id="btnPreview" disabled>미리보기 생성</button>
         <textarea id="code" placeholder="HTML 생성 후 코드가 표시됩니다" readonly></textarea>
-      </div>
-      <div id="previewwrap">
-        <div style="font-weight:600; margin-bottom:8px;">미리보기</div>
-        <div id="preview"></div>
       </div>
     </div>
   </div>
@@ -180,6 +192,11 @@
   const snapTol = document.getElementById('snapTol');
   const lineColor = document.getElementById('lineColor');
   const lineThickness = document.getElementById('lineThickness');
+
+  const emailMode = document.getElementById('emailMode');
+  const emailImgRef = document.getElementById('emailImgRef');
+  const emailBase = document.getElementById('emailBase');
+  const baseLabel = document.getElementById('baseLabel');
 
   let lines = []; // { type:'h'|'v', perc:0..1, el, origin:'h'|'v'|'grid' }
   let naturalW = 0, naturalH = 0;
@@ -343,7 +360,7 @@
     }
   }
 
-  // 생성은 Ctrl+클릭(그리드는 Ctrl(+Shift))
+  // 라인 생성: Ctrl(+Shift)+클릭 (드래그 중 클릭 방지)
   overlay.addEventListener('click', e=>{
     if(!image.src) return;
     if(e.button !== 0) return;
@@ -353,12 +370,8 @@
     if(e.altKey){ deleteNearest(p.x,p.y); return; }
     if(!e.ctrlKey) return;
 
-    if(segMode==='h'){
-      createLine('h', p.y/p.h, 'h'); return;
-    }
-    if(segMode==='v'){
-      createLine('v', p.x/p.w, 'v'); return;
-    }
+    if(segMode==='h'){ createLine('h', p.y/p.h, 'h'); return; }
+    if(segMode==='v'){ createLine('v', p.x/p.w, 'v'); return; }
     const addType = e.shiftKey ? 'v' : 'h';
     if(addType==='h') createLine('h', p.y/p.h, 'grid'); else createLine('v', p.x/p.w, 'grid');
   });
@@ -411,6 +424,11 @@
   snapTol.addEventListener('input', ()=>{ snapPx = Math.max(0, parseInt(snapTol.value||'0',10)); });
   lineColor.addEventListener('input', ()=>{ styleColor = lineColor.value || '#ff4d4f'; layoutLines(); });
   lineThickness.addEventListener('input', ()=>{ styleThickness = Math.max(1, parseInt(lineThickness.value||'2',10)); layoutLines(); });
+
+  emailImgRef.addEventListener('change', ()=>{
+    baseLabel.style.display = (emailImgRef.value==='url') ? '' : 'none';
+  });
+  baseLabel.style.display = (emailImgRef.value==='url') ? '' : 'none';
 
   const ro=new ResizeObserver(()=>{ syncOverlaySize(); layoutLines(); scheduleThumbs(); });
   ro.observe(image); ro.observe(stage);
@@ -528,7 +546,20 @@
     }
   }
 
-  // === HTML 생성 ===
+  // 조각 PNG를 파일로 다운로드(이메일 모드 URL 방식 보조)
+  function downloadSlices(blobs, names){
+    blobs.forEach((blob, i)=>{
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download=names[i];
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    });
+  }
+
+  // === HTML 생성 === (Outlook 대응: 전부 table 기반)
   function generateHTML(){
     if(!image.src) return;
 
@@ -539,49 +570,90 @@
 
     const canv=document.createElement('canvas');
     const ctx=canv.getContext('2d');
-
     const currentLinks = linkStore[segMode];
 
-    // 가로 모드: 세로로 이어붙임(현재 방식 유지)
+    const wantEmail = emailMode.checked;
+    const refType = emailImgRef.value; // 'url' | 'cid'
+    const base = (emailBase.value||'').replace(/\/+$/,''); // trim tail slash
+    const blobs = [];
+    const fnames = [];
+
+    function imgSrcFrom(dataUrl, fileName){
+      if(!wantEmail){
+        return dataUrl; // 일반 모드: data URL 사용
+      }
+      if(refType==='url'){
+        return base ? `${base}/${fileName}` : fileName; // 접두어 없으면 파일명만(후속 호스팅/첨부 시 수정 가능)
+      }
+      // CID
+      return `cid:${fileName}`;
+    }
+
+    function pushBlob(dataUrl, fileName){
+      if(wantEmail){
+        const arr = dataUrl.split(',');
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8 = new Uint8Array(n);
+        while(n--){ u8[n] = bstr.charCodeAt(n); }
+        blobs.push(new Blob([u8], {type:'image/png'}));
+        fnames.push(fileName);
+      }
+    }
+
+    // 가로 모드: 1열 n행 테이블
     if(segMode==='h'){
       canv.width=naturalW;
-      const pieces=[];
+      const rowsHtml=[];
       for(let r=0;r<ys.length-1;r++){
         const top=ys[r], h=ys[r+1]-ys[r];
         canv.height=h; ctx.clearRect(0,0,canv.width,canv.height);
         ctx.drawImage(image, 0, top, naturalW, h, 0, 0, naturalW, h);
-        const src=canv.toDataURL('image/png');
+        const dataUrl=canv.toDataURL('image/png');
+        const fname=`slice-h-${r+1}.png`;
+        const src=imgSrcFrom(dataUrl, fname);
+        pushBlob(dataUrl, fname);
+
         const href=(currentLinks[r]||"").trim();
-        const imgTag=`<img src="${src}" alt="slice-${r+1}" style="display:block;width:100%;height:auto;border:0;"/>`;
-        pieces.push(href ? `<a href="${href}" target="_blank" style="display:block;line-height:0;">${imgTag}</a>` : imgTag);
+        const imgTag=`<img src="${src}" alt="slice-${r+1}" width="800" style="display:block;border:0;width:100%;height:auto;" />`;
+        const inner = href ? `<a href="${href}" target="_blank" style="text-decoration:none;">${imgTag}</a>` : imgTag;
+        rowsHtml.push(`<tr><td style="padding:0;border:none;">${inner}</td></tr>`);
       }
-      codeTA.value = `<!-- Generated by Link Slicer (h) -->\n<div style="max-width:800px;margin:0 auto;">\n${pieces.join("\n")}\n</div>`;
+      const table = `<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;border-spacing:0;width:100%;">\n${rowsHtml.join("\n")}\n</table>`;
+      codeTA.value = `<!-- Generated by Link Slicer (h) Outlook-safe -->\n<div style="max-width:800px;margin:0 auto;">\n${table}\n</div>`;
       btnPreview.disabled=false; btnCopy.disabled=false; btnRegen.disabled=false;
+      if(wantEmail && refType==='url'){ downloadSlices(blobs, fnames); }
       return;
     }
 
-    // 세로 모드: 가로로 이어붙임(원형 형태 유지 - 퍼센트 폭으로 배치)
+    // 세로 모드: 1행 n열 테이블(열 너비 % 지정, img width 속성 부여)
     if(segMode==='v'){
       canv.height=naturalH;
-      const cells=[]; // {html, pct}
+      const tds=[];
       for(let ci=0;ci<xs.length-1;ci++){
         const left=xs[ci], w=xs[ci+1]-xs[ci];
         canv.width=w; ctx.clearRect(0,0,canv.width,canv.height);
         ctx.drawImage(image, left, 0, w, naturalH, 0, 0, w, naturalH);
-        const src=canv.toDataURL('image/png');
+        const dataUrl=canv.toDataURL('image/png');
+        const fname=`slice-v-${ci+1}.png`;
+        const src=imgSrcFrom(dataUrl, fname);
+        pushBlob(dataUrl, fname);
+
         const href=(currentLinks[ci]||"").trim();
-        const imgTag=`<img src="${src}" alt="slice-${ci+1}" style="display:block;width:100%;height:auto;border:0;" />`;
-        const inner = href ? `<a href="${href}" target="_blank" style="display:block;line-height:0;">${imgTag}</a>` : imgTag;
         const pct = (w / naturalW * 100).toFixed(6);
-        cells.push({ html: `<div style="flex:0 0 ${pct}%;max-width:${pct}%;">${inner}</div>`, pct });
+        // Outlook 호환: td width, img width 둘 다 지정
+        const imgTag=`<img src="${src}" alt="slice-${ci+1}" width="${Math.round(800 * (w/naturalW))}" style="display:block;border:0;width:100%;height:auto;" />`;
+        const inner = href ? `<a href="${href}" target="_blank" style="text-decoration:none;">${imgTag}</a>` : imgTag;
+        tds.push(`<td width="${pct}%" style="padding:0;border:none;width:${pct}%;vertical-align:top;">${inner}</td>`);
       }
-      const row = `<div style="display:flex;flex-wrap:nowrap;width:100%;">\n${cells.map(c=>c.html).join("\n")}\n</div>`;
-      codeTA.value = `<!-- Generated by Link Slicer (v) -->\n<div style="max-width:800px;margin:0 auto;">\n${row}\n</div>`;
+      const table = `<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;border-spacing:0;width:100%;"><tr>\n${tds.join("\n")}\n</tr></table>`;
+      codeTA.value = `<!-- Generated by Link Slicer (v) Outlook-safe -->\n<div style="max-width:800px;margin:0 auto;">\n${table}\n</div>`;
       btnPreview.disabled=false; btnCopy.disabled=false; btnRegen.disabled=false;
+      if(wantEmail && refType==='url'){ downloadSlices(blobs, fnames); }
       return;
     }
 
-    // 그리드 모드: 표 기반으로 행×열 위치 고정
+    // 그리드 모드: r×c 테이블(열 너비 % 지정)
     if(segMode==='grid'){
       const rows = ys.length-1, cols = xs.length-1;
       const rowsHtml=[];
@@ -592,19 +664,24 @@
           const left=xs[c], w=xs[c+1]-xs[c];
           canv.width=w; canv.height=h; ctx.clearRect(0,0,w,h);
           ctx.drawImage(image, left, top, w, h, 0, 0, w, h);
-          const src=canv.toDataURL('image/png');
+          const dataUrl=canv.toDataURL('image/png');
           const flatIndex = r*cols + c;
+          const fname=`slice-grid-${r+1}-${c+1}.png`;
+          const src=imgSrcFrom(dataUrl, fname);
+          pushBlob(dataUrl, fname);
+
           const href=(currentLinks[flatIndex]||"").trim();
-          const imgTag=`<img src="${src}" alt="cell-${r+1}-${c+1}" style="display:block;width:100%;height:auto;border:0;" />`;
-          const inner = href ? `<a href="${href}" target="_blank" style="display:block;line-height:0;">${imgTag}</a>` : imgTag;
           const pct = (w / naturalW * 100).toFixed(6);
-          tds.push(`<td style="padding:0;border:none;width:${pct}%;vertical-align:top;">${inner}</td>`);
+          const imgTag=`<img src="${src}" alt="cell-${r+1}-${c+1}" width="${Math.round(800 * (w/naturalW))}" style="display:block;border:0;width:100%;height:auto;" />`;
+          const inner = href ? `<a href="${href}" target="_blank" style="text-decoration:none;">${imgTag}</a>` : imgTag;
+          tds.push(`<td width="${pct}%" style="padding:0;border:none;width:${pct}%;vertical-align:top;">${inner}</td>`);
         }
         rowsHtml.push(`<tr>${tds.join("")}</tr>`);
       }
-      const table = `<table role="presentation" style="border-collapse:collapse;border-spacing:0;width:100%;">\n${rowsHtml.join("\n")}\n</table>`;
-      codeTA.value = `<!-- Generated by Link Slicer (grid) -->\n<div style="max-width:800px;margin:0 auto;">\n${table}\n</div>`;
+      const table = `<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;border-spacing:0;width:100%;">\n${rowsHtml.join("\n")}\n</table>`;
+      codeTA.value = `<!-- Generated by Link Slicer (grid) Outlook-safe -->\n<div style="max-width:800px;margin:0 auto;">\n${table}\n</div>`;
       btnPreview.disabled=false; btnCopy.disabled=false; btnRegen.disabled=false;
+      if(wantEmail && refType==='url'){ downloadSlices(blobs, fnames); }
       return;
     }
   }
@@ -612,7 +689,6 @@
   btnGen.addEventListener('click', generateHTML);
   btnRegen.addEventListener('click', generateHTML);
 
-  // 새 탭 미리보기
   btnPreview.addEventListener('click', () => {
     if (!codeTA.value.trim()) {
       alert('HTML을 먼저 생성해주세요.');
@@ -637,7 +713,7 @@ img { display:block; max-width:100%; height:auto; margin:0 auto; border:none; }
 </style>
 </head>
 <body>
-<div class="notice">미리보기 모드 – 링크 입력이 비어있는 조각은 클릭되지 않습니다</div>
+<div class="notice">미리보기 – 이메일 모드에서 이미지 URL 또는 CID를 확인하세요.</div>
 <div class="container">
 ${codeTA.value
   .replace(/<!--[\s\S]*?-->/g, '')
@@ -663,7 +739,7 @@ ${codeTA.value
 
   function buildState(){
     return {
-      version: 11,
+      version: 12,
       savedAt: new Date().toISOString(),
       mode: segMode,
       rows: uniformRows,
@@ -752,4 +828,3 @@ ${codeTA.value
 </script>
 </body>
 </html>
-

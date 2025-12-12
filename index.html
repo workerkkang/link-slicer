@@ -3,27 +3,30 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Link Slicer – 라인 마킹 & 좌표 추출</title>
+<title>Link Slicer – 분할선 & 링크 생성기</title>
 <style>
   :root{
-    --border:#cfd4dc; --muted:#6b7280; --accent:#ff4d4f; --bg:#f7f9fc;
+    --border:#cfd4dc; --muted:#6b7280; --accent:#ff4d4f; --bg:#f7f9fc; --panel:#ffffff;
   }
   *{box-sizing:border-box}
   html,body{height:100%}
   body{
-    margin:0; display:flex; min-height:100vh; font-family:system-ui,Segoe UI,Roboto,"Apple SD Gothic Neo",Pretendard,sans-serif;
+    margin:0; display:flex; min-height:100vh;
+    font-family:system-ui,Segoe UI,Roboto,"Apple SD Gothic Neo",Pretendard,sans-serif;
     background:var(--bg); color:#111827;
   }
 
-  /* 왼쪽 사이드바(사용법 + 업로드 박스) */
+  /* 왼쪽: 사용법 + 업로드 */
   #sidebar{
-    width:300px; border-right:1px solid var(--border); background:#fff; display:flex; flex-direction:column;
+    width:300px; border-right:1px solid var(--border);
+    background:var(--panel); display:flex; flex-direction:column;
   }
   .side-header{padding:18px 16px; border-bottom:1px solid var(--border)}
   .side-header h2{margin:0;font-size:18px}
   .side-body{padding:16px; overflow:auto}
   .muted{color:var(--muted)}
   ul{margin:8px 0 0 18px}
+  footer{padding:10px 12px; border-top:1px solid var(--border); background:#fff; font-size:12px;color:#6b7280}
 
   /* 드래그&드롭 업로드 박스 */
   #dropzone{
@@ -33,49 +36,81 @@
   #dropzone.dragover{ border-color:var(--accent); background:#fff1f1 }
   #fileInput{ display:none }
 
-  /* 메인 영역 */
+  /* 가운데: 작업 영역 */
   #main{ flex:1; display:flex; flex-direction:column; min-width:0; }
-  #controls{ padding:12px; border-bottom:1px solid var(--border); background:#fff; display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
-  #controls button{
+  #topbar{ padding:12px; border-bottom:1px solid var(--border); background:#fff; display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  #topbar button{
     appearance:none; border:1px solid var(--border); background:#fff; padding:8px 12px; border-radius:10px; cursor:pointer;
   }
-  #controls button.primary{ border-color:#dbe3ff; background:#eef3ff }
-  #controls .pill{font-size:12px;color:#4b5563}
+  #topbar button.primary{ border-color:#dbe3ff; background:#eef3ff }
+  #topbar .pill{font-size:12px;color:#4b5563}
 
-  /* 캔버스 컨테이너(이미지 + 라인) */
+  #workarea{
+    display:grid; grid-template-columns:1fr 340px; gap:14px;
+    padding:14px; min-height:0; flex:1; overflow:hidden;
+  }
+
+  /* 캔버스 컨테이너(스크롤 영역) */
   #canvas-container{
-    position:relative; flex:1; overflow:auto; background:#e5e7eb;
+    position:relative; overflow:auto; background:#e5e7eb; border:1px solid var(--border); border-radius:10px;
     display:flex; align-items:flex-start; justify-content:center; padding:18px;
+    min-height:0;
   }
-  #stage{
-    position:relative; /* 라인의 기준 컨테이너 */
-    display:inline-block; background:#fff; border:1px solid var(--border); box-shadow:0 2px 8px rgba(0,0,0,.05);
-  }
-  #uploadedImage{ display:block; max-width:100%; height:auto; }
 
-  /* 라인 스타일(빨강) */
+  /* 스테이지: 이미지 + 오버레이 묶음 */
+  #stage{
+    position:relative; display:none;
+  }
+  #uploadedImage{
+    display:block; max-width:100%; height:auto; border:1px solid var(--border); background:#fff;
+    box-shadow:0 2px 8px rgba(0,0,0,.05);
+  }
+
+  /* 오버레이: 이미지 위에 얹는 레이어(선/히트영역) */
+  #overlay{
+    position:absolute; left:0; top:0; z-index:5; pointer-events:none; /* 선만 포인터 허용 */
+  }
+
+  /* 선(빨간) – 오버레이 위에 표시 */
   .line{
-    position:absolute; background:var(--accent); cursor:move; z-index:5;
-    box-shadow:0 0 6px rgba(255,77,79,.45);
+    position:absolute; background:var(--accent); cursor:move; box-shadow:0 0 6px rgba(255,77,79,.45);
+    pointer-events:auto; /* 선은 드래그 가능 */
   }
   .h-line{ height:2px; left:0; right:0; }
   .v-line{ width:2px;  top:0;  bottom:0; }
 
-  /* 푸터 */
-  footer{padding:10px 12px; border-top:1px solid var(--border); background:#fff; font-size:12px;color:#6b7280}
+  /* 오른쪽: 링크 입력 패널 */
+  #rightpanel{
+    background:#fff; border:1px solid var(--border); border-radius:10px; display:flex; flex-direction:column; min-height:0;
+  }
+  #rightpanel header{ padding:12px 12px; border-bottom:1px solid var(--border); font-weight:600 }
+  #segments{ padding:12px; overflow:auto; display:flex; flex-direction:column; gap:10px; min-height:0; }
+  .segrow{ display:grid; grid-template-columns:auto 1fr; gap:8px; align-items:center; }
+  .segrow small{ color:#6b7280 }
+  .segrow input{ width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:8px; }
+  #codebox{ padding:12px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:8px; }
+  #code{ width:100%; min-height:120px; border:1px solid var(--border); border-radius:8px; padding:10px; font-family:ui-monospace,Consolas,monospace; }
+
+  /* 미리보기 */
+  #previewwrap{ padding:12px; border-top:1px solid var(--border); }
+  #preview{ display:flex; flex-direction:column; gap:4px; }
+
+  @media (max-width: 1080px){
+    #workarea{ grid-template-columns:1fr; }
+  }
 </style>
 </head>
 <body>
 
-<!-- 사이드바: 사용법 + 업로드 박스 -->
+<!-- 사이드바: 사용법 + 업로드 -->
 <aside id="sidebar">
   <div class="side-header">
     <h2>📌 사용법 요약</h2>
   </div>
   <div class="side-body">
     <ol style="margin:0;padding-left:20px">
-      <li>이미지를 업로드(아래 박스에 <b>드래그&드롭</b> 또는 클릭)</li>
-      <li>이미지 위에서 클릭:
+      <li>이미지 업로드(아래 박스에 <b>드래그&드롭</b> 또는 클릭)</li>
+      <li>이미지 위 클릭:
         <ul>
           <li>일반 클릭 → <b>가로선</b></li>
           <li><kbd>Shift</kbd>+클릭 → <b>세로선</b></li>
@@ -83,7 +118,7 @@
         </ul>
       </li>
       <li>선을 드래그하여 위치 조정</li>
-      <li>상단에서 <b>Export JSON</b>으로 좌표(원본 px·%) 추출</li>
+      <li>우측 패널에서 각 조각 <b>링크</b> 입력 → 상단 <b>HTML 생성/복사</b></li>
     </ol>
 
     <!-- 드래그&드롭 업로드 -->
@@ -94,20 +129,40 @@
       <input id="fileInput" type="file" accept="image/*">
     </div>
   </div>
-  <footer>Tip: 창 크기를 바꿔도 라인이 유지되도록 <b>비율(%)</b>로 저장합니다.</footer>
+  <footer>긴 이미지도 오버레이로 정확히 표시됩니다. 가로선 기준으로 링크 조각을 구성합니다.</footer>
 </aside>
 
 <!-- 메인 -->
 <main id="main">
-  <div id="controls">
-    <button id="btnExport" class="primary">Export JSON</button>
-    <button id="btnClearLines">Clear Lines</button>
+  <div id="topbar">
+    <button id="btnGen" class="primary" disabled>HTML 생성</button>
+    <button id="btnCopy" disabled>코드 복사</button>
+    <button id="btnClearLines">선 모두 삭제</button>
     <span class="pill">일반 클릭=가로 | Shift=세로 | Alt=삭제</span>
   </div>
 
-  <div id="canvas-container">
-    <div id="stage" style="display:none">
-      <img id="uploadedImage" alt="업로드 이미지 미리보기">
+  <div id="workarea">
+    <!-- 좌측: 이미지/오버레이 -->
+    <div id="canvas-container">
+      <div id="stage">
+        <img id="uploadedImage" alt="업로드 이미지">
+        <!-- 이미지 크기와 동기화되는 오버레이 -->
+        <div id="overlay"></div>
+      </div>
+    </div>
+
+    <!-- 우측: 링크/코드/미리보기 -->
+    <div id="rightpanel">
+      <header>조각 링크 입력(가로선 기준)</header>
+      <div id="segments"></div>
+      <div id="codebox">
+        <button id="btnPreview" disabled>미리보기 생성</button>
+        <textarea id="code" placeholder="HTML 생성 후 코드가 표시됩니다" readonly></textarea>
+      </div>
+      <div id="previewwrap">
+        <div style="font-weight:600; margin-bottom:8px;">미리보기</div>
+        <div id="preview"></div>
+      </div>
     </div>
   </div>
 </main>
@@ -118,28 +173,40 @@
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('fileInput');
   const stage = document.getElementById('stage');
+  const overlay = document.getElementById('overlay');
   const image = document.getElementById('uploadedImage');
   const container = document.getElementById('canvas-container');
-  const btnExport = document.getElementById('btnExport');
+
+  const segmentsWrap = document.getElementById('segments');
+  const btnGen = document.getElementById('btnGen');
+  const btnCopy = document.getElementById('btnCopy');
   const btnClearLines = document.getElementById('btnClearLines');
+  const btnPreview = document.getElementById('btnPreview');
+  const codeTA = document.getElementById('code');
+  const preview = document.getElementById('preview');
 
   // 상태
   let lines = []; // { type: 'h'|'v', perc: number, el: HTMLElement }
   let naturalW = 0, naturalH = 0;
+  let segLinks = []; // 가로선 기준 조각 링크
 
-  // ========== 업로드(클릭/드래그) ==========
+  // ========== 업로드 ==========
   function loadFile(file){
     if(!file) return;
     const url = URL.createObjectURL(file);
     image.onload = () => {
-      // 원본 해상도 확보
       naturalW = image.naturalWidth;
       naturalH = image.naturalHeight;
-      // 스테이지 표시 및 라인 초기화
       stage.style.display = 'inline-block';
-      clearLines();
-      // 레이아웃 갱신
-      layoutLines();
+
+      // 오버레이 크기를 이미지 표시 크기와 동기화
+      syncOverlaySize();
+      clearLines(true); // true: 링크 UI도 초기화
+      btnGen.disabled = false;
+      btnPreview.disabled = true;
+      btnCopy.disabled = true;
+      codeTA.value = '';
+      preview.innerHTML = '';
     };
     image.src = url;
   }
@@ -164,23 +231,33 @@
     if (f && f.type.startsWith('image/')) loadFile(f);
   });
 
-  // ========== 좌표 도우미 ==========
-  /** 현재 표시 크기(렌더 크기) */
-  function displaySize(){
+  // ========== 오버레이/좌표 ==========
+
+  /** 이미지 표시 크기에 오버레이 맞추기 */
+  function syncOverlaySize(){
+    // 이미지 렌더링 크기
     const w = image.clientWidth;
     const h = image.clientHeight;
-    return { w, h };
+    overlay.style.width = w + 'px';
+    overlay.style.height = h + 'px';
+    // 오버레이 위치
+    overlay.style.left = '0px';
+    overlay.style.top  = '0px';
   }
 
-  /** 컨테이너 내 클릭 좌표(스크롤 보정 포함) */
-  function pointerInStage(ev){
-    const rect = stage.getBoundingClientRect();
+  /** 스테이지 상대 좌표(스크롤 보정 포함) */
+  function pointerInOverlay(ev){
+    const rect = overlay.getBoundingClientRect();
     const x = ev.clientX - rect.left + container.scrollLeft;
     const y = ev.clientY - rect.top  + container.scrollTop;
-    const { w, h } = displaySize();
+    const w = overlay.clientWidth;
+    const h = overlay.clientHeight;
     const inside = x >= 0 && y >= 0 && x <= w && y <= h;
-    return { x, y, inside, w, h };
+    return { x, y, w, h, inside };
   }
+
+  /** 현재 렌더 크기 반환 */
+  function displaySize(){ return { w: overlay.clientWidth, h: overlay.clientHeight }; }
 
   /** 라인 DOM 재배치(perc -> display px) */
   function layoutLines(){
@@ -200,15 +277,17 @@
     });
   }
 
-  // ========== 라인 생성/삭제/드래그 ==========
+  // ========== 라인 추가/삭제/드래그 ==========
+
   function createLine(type, perc){
     const el = document.createElement('div');
     el.className = type === 'h' ? 'line h-line' : 'line v-line';
-    stage.appendChild(el);
+    overlay.appendChild(el);
 
     const obj = { type, perc, el };
     lines.push(obj);
     layoutLines();
+    updateSegmentsUI(); // 가로선 변경 반영
 
     // 드래그 이동
     let dragging = false, startClient = 0, startPerc = 0;
@@ -225,6 +304,7 @@
                                      : (ev.clientX - startClient) / w;
         obj.perc = Math.max(0, Math.min(1, startPerc + delta));
         layoutLines();
+        if (type === 'h') updateSegmentsUI(); // 가로선만 조각 영향
       };
       const onUp = () => {
         dragging = false;
@@ -253,24 +333,26 @@
     if (nearest) {
       nearest.el.remove();
       lines = lines.filter(l => l !== nearest);
+      if (nearest.type === 'h') updateSegmentsUI();
     }
   }
 
-  function clearLines(){
+  function clearLines(clearLinks=false){
     lines.forEach(l => l.el && l.el.remove());
     lines = [];
+    if (clearLinks){
+      segLinks = [];
+      segmentsWrap.innerHTML = '';
+    }
   }
 
-  // ========== 클릭 이벤트(가로/세로/삭제) ==========
-  stage.addEventListener('click', (e) => {
+  // 오버레이 클릭: Alt=삭제 / Shift=세로 / 기본=가로
+  overlay.addEventListener('click', (e) => {
     if (!image.src) return;
-    const p = pointerInStage(e);
+    const p = pointerInOverlay(e);
     if (!p.inside) return;
 
-    // Alt: 가장 가까운 선 삭제
     if (e.altKey){ deleteNearest(p.x, p.y); return; }
-
-    // Shift: 세로선, 일반: 가로선
     if (e.shiftKey) {
       const perc = p.x / p.w;
       createLine('v', perc);
@@ -280,29 +362,134 @@
     }
   });
 
-  // ========== 리사이즈 대응(비율 기반 재배치) ==========
-  const ro = new ResizeObserver(() => layoutLines());
-  ro.observe(stage);
+  // 리사이즈(이미지 표시 크기 변동) 대응
+  const ro = new ResizeObserver(() => {
+    syncOverlaySize();
+    layoutLines();
+  });
   ro.observe(image);
+  ro.observe(stage);
 
-  // ========== Export / Clear ==========
-  btnExport.addEventListener('click', () => {
-    if (!image.src) { alert('이미지를 먼저 업로드하세요.'); return; }
-    const data = lines.map(l => {
-      // 원본(px) 좌표로 환산
-      const px = (l.type === 'h') ? Math.round(l.perc * naturalH)
-                                  : Math.round(l.perc * naturalW);
-      const percent = (l.perc * 100).toFixed(2);
-      return { type: l.type, pixel_natural: px, percent };
+  // 스크롤 시 선/오버레이는 컨테이너 내부에서 올바르게 그려짐(좌표 보정 로직 사용)
+
+  // ========== 조각 UI(가로선 기준) ==========
+
+  function getHorizontalPercsSorted(){
+    return lines.filter(l => l.type === 'h').map(l => l.perc).sort((a,b)=>a-b);
+  }
+
+  function updateSegmentsUI(){
+    const cuts = getHorizontalPercsSorted();
+    // 경계: 0, cuts..., 1
+    const bounds = [0, ...cuts, 1];
+    const segCount = Math.max(1, bounds.length - 1);
+    const prev = segLinks.slice();
+    segLinks = Array.from({length: segCount}, (_,i)=> prev[i] ?? "");
+
+    // 렌더
+    segmentsWrap.innerHTML = "";
+    for (let i=0;i<segCount;i++){
+      const hPerc = (bounds[i+1] - bounds[i]) * 100;
+      const row = document.createElement('div');
+      row.className = 'segrow';
+      row.innerHTML = `
+        <small>조각 ${i+1} <span style="color:#9ca3af">(${hPerc.toFixed(1)}%)</span></small>
+        <input type="url" placeholder="https:// 링크 입력" value="${segLinks[i] ?? ""}">
+      `;
+      row.querySelector('input').addEventListener('input', (ev)=> segLinks[i] = ev.target.value.trim());
+      segmentsWrap.appendChild(row);
+    }
+
+    // 조각이 1개 이상일 때만 버튼 활성화
+    const canGen = image.src && segCount >= 1;
+    btnGen.disabled = !canGen;
+    btnPreview.disabled = true;
+    btnCopy.disabled = true;
+    codeTA.value = '';
+    preview.innerHTML = '';
+  }
+
+  // ========== HTML 생성(가로 조각만) & 미리보기 & 복사 ==========
+
+  async function generateHTML(){
+    if (!image.src) return;
+    const cutsPerc = getHorizontalPercsSorted();
+    const boundsPerc = [0, ...cutsPerc, 1];
+
+    // natural px 경계 계산
+    const ys = boundsPerc.map(p => Math.round(p * naturalH));
+
+    // 캔버스로 슬라이스
+    const canv = document.createElement('canvas');
+    canv.width = naturalW;
+    const ctx = canv.getContext('2d');
+
+    const dataURLs = [];
+    for (let i=0;i<ys.length-1;i++){
+      const top = ys[i];
+      const height = ys[i+1] - ys[i];
+      if (height <= 0) continue;
+      canv.height = height;
+      ctx.clearRect(0,0,canv.width,canv.height);
+      ctx.drawImage(image, 0, top, naturalW, height, 0, 0, naturalW, height);
+      const url = canv.toDataURL('image/png');
+      dataURLs.push(url);
+    }
+
+    // HTML 조립
+    const pieces = dataURLs.map((src, i) => {
+      const href = segLinks[i] || "#";
+      return `<a href="${href}" target="_blank" style="display:block;line-height:0;"><img src="${src}" alt="slice-${i+1}" style="display:block;width:100%;height:auto;border:0;"/></a>`;
+    }).join("\n");
+
+    const html = `<!-- Generated by Link Slicer -->
+<div style="max-width:800px;margin:0 auto;">
+${pieces}
+</div>`;
+
+    codeTA.value = html;
+    btnPreview.disabled = false;
+    btnCopy.disabled = false;
+
+    // 미리보기
+    preview.innerHTML = "";
+    dataURLs.forEach((src, i) => {
+      const a = document.createElement('a');
+      a.href = segLinks[i] || "#";
+      a.target = "_blank";
+      const im = document.createElement('img');
+      im.src = src;
+      im.alt = `slice-${i+1}`;
+      im.style.display = "block";
+      im.style.width = "100%";
+      im.style.height = "auto";
+      a.appendChild(im);
+      preview.appendChild(a);
     });
-    const json = JSON.stringify({ naturalWidth:naturalW, naturalHeight:naturalH, lines:data }, null, 2);
-    // 결과 표시
-    const w = window.open('', '_blank', 'width=520,height=640');
-    w.document.write(`<pre style="margin:0;padding:12px;white-space:pre-wrap;word-break:break-all;">${json}</pre>`);
-    w.document.title = 'Link Slicer Export';
+  }
+
+  btnGen.addEventListener('click', generateHTML);
+  btnPreview.addEventListener('click', ()=> {
+    // 이미 generateHTML에서 즉시 미리보기를 생성하므로 별도 작업 불필요
+    alert('미리보기가 아래에 표시되었습니다.');
+  });
+  btnCopy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(codeTA.value);
+      btnCopy.textContent = "복사됨";
+      setTimeout(()=>btnCopy.textContent="코드 복사", 1200);
+    } catch {
+      codeTA.select();
+      document.execCommand("copy");
+      btnCopy.textContent = "복사됨";
+      setTimeout(()=>btnCopy.textContent="코드 복사", 1200);
+    }
   });
 
-  btnClearLines.addEventListener('click', clearLines);
+  // 초기 상태
+  btnGen.disabled = true;
+  btnPreview.disabled = true;
+  btnCopy.disabled = true;
 })();
 </script>
 </body>

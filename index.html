@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Link Slicer – 가로/세로 조각 링크 생성</title>
+<title>Link Slicer – 가로/세로/가로x세로 + 균등분할 + 스냅/잠금/스타일</title>
 <style>
   :root{ --border:#cfd4dc; --muted:#6b7280; --accent:#ff4d4f; --bg:#f7f9fc; --panel:#ffffff; }
   *{box-sizing:border-box}
@@ -16,7 +16,6 @@
   .side-header h2{margin:0;font-size:18px}
   .side-body{padding:16px; overflow:auto}
   .muted{color:var(--muted)}
-  ul{margin:8px 0 0 18px}
   footer{padding:10px 12px; border-top:1px solid var(--border); background:#fff; font-size:12px;color:#6b7280}
 
   /* 업로드 박스 */
@@ -29,14 +28,19 @@
 
   /* 메인 */
   #main{ flex:1; display:flex; flex-direction:column; min-width:0; }
-  #topbar{ padding:12px; border-bottom:1px solid var(--border); background:#fff; display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  #topbar{ padding:12px; border-bottom:1px solid var(--border); background:#fff; display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
   #topbar button{ appearance:none; border:1px solid var(--border); background:#fff; padding:8px 12px; border-radius:10px; cursor:pointer; }
   #topbar button.primary{ border-color:#dbe3ff; background:#eef3ff }
   #topbar .spacer{ flex:1 }
   .pill{font-size:12px;color:#4b5563}
-  .segmode{display:flex; align-items:center; gap:6px; border:1px solid var(--border); padding:6px 10px; border-radius:10px; background:#fafafa; font-size:14px}
+  .segmode{display:flex; align-items:center; gap:10px; border:1px solid var(--border); padding:6px 10px; border-radius:10px; background:#fafafa; font-size:14px}
+  .uniform{display:flex; align-items:center; gap:8px; border:1px solid var(--border); padding:6px 10px; border-radius:10px; background:#fafafa; }
+  .uniform input{ width:64px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; }
+  .options{display:flex; align-items:center; gap:10px; border:1px solid var(--border); padding:6px 10px; border-radius:10px; background:#fafafa; }
+  .options input[type="number"]{ width:70px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; }
+  .hint{font-size:12px; color:#6b7280}
 
-  #workarea{ display:grid; grid-template-columns:1fr 380px; gap:14px; padding:14px; min-height:0; flex:1; overflow:hidden; }
+  #workarea{ display:grid; grid-template-columns:1fr 420px; gap:14px; padding:14px; min-height:0; flex:1; overflow:hidden; }
 
   /* 캔버스 컨테이너 */
   #canvas-container{
@@ -50,9 +54,9 @@
   #overlay{ position:absolute; left:0; top:0; z-index:10; pointer-events:auto; }
 
   /* 선 */
-  .line{ position:absolute; background:var(--accent); cursor:move; box-shadow:0 0 6px rgba(255,77,79,.45); pointer-events:auto; }
-  .h-line{ height:2px; left:0; right:0; }
-  .v-line{ width:2px;  top:0;  bottom:0; }
+  .line{ position:absolute; background:var(--accent); cursor:move; box-shadow:0 0 6px rgba(255,77,79,.35); pointer-events:auto; }
+  .h-line{ left:0; right:0; }
+  .v-line{ top:0;  bottom:0; }
 
   /* 우측 패널 */
   #rightpanel{ background:#fff; border:1px solid var(--border); border-radius:10px; display:flex; flex-direction:column; min-height:0; }
@@ -76,7 +80,7 @@
 
   #stateFile{ display:none }
 
-  @media (max-width: 1120px){ #workarea{ grid-template-columns:1fr; } }
+  @media (max-width: 1160px){ #workarea{ grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -87,9 +91,12 @@
   <div class="side-body">
     <ol style="margin:0;padding-left:20px">
       <li>이미지 업로드(아래 박스에 <b>드래그&드롭</b> 또는 클릭)</li>
-      <li>이미지 위 클릭(현재 선택한 <b>조각 기준</b> 방향으로 선 추가)</li>
-      <li>Shift+클릭 = 반대 방향 선 추가, Alt+클릭 = 가까운 선 삭제</li>
-      <li>우측 패널에서 각 조각 <b>링크</b> 입력 → <b>HTML 생성/복사</b></li>
+      <li>현재 선택한 <b>조각 기준</b>에 따라 선을 추가합니다.<br>
+          • 가로/세로: 클릭=해당 방향, Shift=반대 방향<br>
+          • 가로x세로: 클릭=가로선, Shift=세로선</li>
+      <li>Alt+클릭 = 가장 가까운 선 삭제, 드래그=위치 이동</li>
+      <li>필요하면 <b>행/열</b> 숫자를 넣고 “균등분할 적용”으로 자동 생성</li>
+      <li>우측에서 각 조각 링크 입력 → <b>HTML 생성/복사</b></li>
     </ol>
     <div id="dropzone">
       <div style="font-weight:600; margin-bottom:4px;">이미지 업로드</div>
@@ -98,7 +105,7 @@
       <input id="fileInput" type="file" accept="image/*">
     </div>
   </div>
-  <footer>가로/세로 모드를 바꿔 원하는 방향으로 조각을 생성하세요.</footer>
+  <footer>모드에 따라 보이는 선이 달라집니다. (가로=가로선만, 세로=세로선만, 가로x세로=모두)</footer>
 </aside>
 
 <!-- 메인 -->
@@ -109,10 +116,26 @@
     <button id="btnCopy" disabled>코드 복사</button>
     <span class="spacer"></span>
 
-    <div class="segmode" title="조각을 계산하는 기준 방향">
+    <div class="segmode" title="조각을 계산하는 기준">
       조각 기준:
       <label><input type="radio" name="mode" value="h" checked> 가로</label>
       <label><input type="radio" name="mode" value="v"> 세로</label>
+      <label><input type="radio" name="mode" value="grid"> 가로x세로</label>
+    </div>
+
+    <div class="uniform" title="균등 간격으로 자동 분할선 생성">
+      Row(행): <input id="rowsInput" type="number" min="1" value="3">
+      Col(열): <input id="colsInput" type="number" min="1" value="3">
+      <button id="btnUniform">균등분할 적용</button>
+      <div class="hint">가로: Row만, 세로: Col만 사용</div>
+    </div>
+
+    <div class="options" title="스냅/잠금/선 스타일">
+      <label><input id="lockToggle" type="checkbox"> 선 잠금</label>
+      <label><input id="snapToggle" type="checkbox" checked> 스냅</label>
+      스냅(px): <input id="snapTol" type="number" min="0" value="8">
+      색상: <input id="lineColor" type="color" value="#ff4d4f">
+      두께(px): <input id="lineThickness" type="number" min="1" value="2">
     </div>
 
     <span class="spacer"></span>
@@ -120,7 +143,7 @@
     <button id="btnLoadState" title="저장한 JSON 불러오기">상태 불러오기</button>
     <input id="stateFile" type="file" accept="application/json" />
     <button id="btnClearLines">선 모두 삭제</button>
-    <span class="pill">클릭=현재 기준 / Shift=반대 / Alt=삭제</span>
+    <span class="pill">클릭/Shift/Alt 동작은 상단 설명 참고</span>
   </div>
 
   <div id="workarea">
@@ -150,7 +173,7 @@
 
 <script>
 (() => {
-  // 요소
+  // 요소 -------------------------------------------------------
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('fileInput');
   const stateFile = document.getElementById('stateFile');
@@ -171,247 +194,389 @@
   const preview = document.getElementById('preview');
 
   const modeRadios = document.querySelectorAll('input[name="mode"]');
+  const rowsInput = document.getElementById('rowsInput');
+  const colsInput = document.getElementById('colsInput');
+  const btnUniform = document.getElementById('btnUniform');
 
-  // 상태
-  let lines = []; // { type: 'h'|'v', perc: number, el: HTMLElement }
+  const lockToggle = document.getElementById('lockToggle');
+  const snapToggle = document.getElementById('snapToggle');
+  const snapTol = document.getElementById('snapTol');
+  const lineColor = document.getElementById('lineColor');
+  const lineThickness = document.getElementById('lineThickness');
+
+  // 상태 -------------------------------------------------------
+  let lines = []; // { type:'h'|'v', perc:0..1, el }
   let naturalW = 0, naturalH = 0;
-  let segLinks = []; // 조각 링크(현재 모드 기준)
+  let segLinks = []; // 현재 모드 기준 조각 링크(그리드는 r*c 개)
   let thumbRAF = null;
-  let lastGeneratedHTML = "";
-  let dirty = true;
-  let segMode = 'h'; // 'h' = 가로 기준, 'v' = 세로 기준
+  let segMode = 'h'; // 'h'|'v'|'grid'
+  let uniformRows = 3, uniformCols = 3;
 
-  // 모드 변경
-  modeRadios.forEach(r => r.addEventListener('change', () => {
-    segMode = [...modeRadios].find(x=>x.checked).value; // 'h' or 'v'
-    updateSegmentsUI(true);
-    markDirty();
-  }));
+  // 스타일/동작 옵션
+  let styleColor = '#ff4d4f';
+  let styleThickness = 2;
+  let locked = false;
+  let snapEnabled = true;
+  let snapPx = 8;
 
-  // 업로드
+  // 유틸 -------------------------------------------------------
+  function displaySize(){ return { w: overlay.clientWidth, h: overlay.clientHeight }; }
+  function syncOverlaySize(){ overlay.style.width=image.clientWidth+'px'; overlay.style.height=image.clientHeight+'px'; }
+  function isLineVisible(l){
+    if(segMode==='h') return l.type==='h';
+    if(segMode==='v') return l.type==='v';
+    return true; // grid
+  }
+  function applyStyle(el, type){
+    el.style.background = styleColor;
+    if(type==='h'){
+      el.style.height = styleThickness + 'px';
+      el.style.top = (parseFloat(el.style.top)||0) + 'px'; // ensure unit
+      el.className='line h-line';
+    }else{
+      el.style.width  = styleThickness + 'px';
+      el.style.left = (parseFloat(el.style.left)||0) + 'px';
+      el.className='line v-line';
+    }
+    el.style.boxShadow = `0 0 6px ${styleColor}55`;
+  }
+  function layoutLines(){
+    const {w,h} = displaySize();
+    lines.forEach(l=>{
+      if(l.type==='h'){
+        l.el.style.left='0'; l.el.style.right='0';
+        l.el.style.top=(l.perc*h - styleThickness/2) + 'px';
+      }else{
+        l.el.style.top='0'; l.el.style.bottom='0';
+        l.el.style.left=(l.perc*w - styleThickness/2) + 'px';
+      }
+      applyStyle(l.el, l.type);
+      l.el.style.display = isLineVisible(l) ? '' : 'none';
+      l.el.style.cursor = locked ? 'default' : 'move';
+      l.el.style.pointerEvents = locked ? 'none' : 'auto';
+    });
+  }
+  function getPercsSorted(type){ return lines.filter(l=>l.type===type).map(l=>l.perc).sort((a,b)=>a-b); }
+
+  function markDirty(){
+    btnRegen.disabled = false;
+    btnPreview.disabled = true;
+    btnCopy.disabled = true;
+    codeTA.value = '';
+    preview.innerHTML = '';
+  }
+
+  // 업로드 -----------------------------------------------------
   function loadFile(file){
     if(!file) return;
     const url = URL.createObjectURL(file);
     image.onload = () => {
-      naturalW = image.naturalWidth;
-      naturalH = image.naturalHeight;
-      stage.style.display = 'inline-block';
-      syncOverlaySize();
-      fullReset();
+      naturalW = image.naturalWidth; naturalH = image.naturalHeight;
+      stage.style.display='inline-block';
+      syncOverlaySize(); fullReset();
     };
-    image.src = url;
+    image.src=url;
   }
-  dropzone.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', (e) => loadFile(e.target.files?.[0]));
-  ['dragenter','dragover'].forEach(t => dropzone.addEventListener(t, e => {e.preventDefault(); dropzone.classList.add('dragover');}));
-  ['dragleave','dragend','drop'].forEach(t => dropzone.addEventListener(t, () => dropzone.classList.remove('dragover')));
-  dropzone.addEventListener('drop', (e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f?.type.startsWith('image/')) loadFile(f); });
+  dropzone.addEventListener('click', ()=>fileInput.click());
+  fileInput.addEventListener('change', e=>loadFile(e.target.files?.[0]));
+  ['dragenter','dragover'].forEach(t=>dropzone.addEventListener(t, e=>{e.preventDefault(); dropzone.classList.add('dragover');}));
+  ['dragleave','dragend','drop'].forEach(t=>dropzone.addEventListener(t, ()=>dropzone.classList.remove('dragover')));
+  dropzone.addEventListener('drop', e=>{ e.preventDefault(); const f=e.dataTransfer.files?.[0]; if(f?.type.startsWith('image/')) loadFile(f); });
 
-  // 오버레이/좌표
-  function syncOverlaySize(){
-    overlay.style.width  = image.clientWidth + 'px';
-    overlay.style.height = image.clientHeight + 'px';
-    overlay.style.left = '0px'; overlay.style.top = '0px';
-  }
+  // 선 생성/삭제/스냅 ------------------------------------------
   function pointerInOverlay(ev){
     const r = overlay.getBoundingClientRect();
-    const x = ev.clientX - r.left;
-    const y = ev.clientY - r.top;
+    const x = ev.clientX - r.left, y = ev.clientY - r.top;
     const w = overlay.clientWidth, h = overlay.clientHeight;
-    return { x, y, w, h, inside: x>=0 && y>=0 && x<=w && y<=h };
+    return {x,y,w,h, inside:x>=0&&y>=0&&x<=w&&y<=h};
   }
-  const displaySize = () => ({ w: overlay.clientWidth, h: overlay.clientHeight });
-
-  function layoutLines(){
-    const { w, h } = displaySize();
-    lines.forEach(l => {
-      if (l.type === 'h') { l.el.style.top  = (l.perc*h)+'px'; l.el.className='line h-line'; }
-      else                { l.el.style.left = (l.perc*w)+'px'; l.el.className='line v-line'; }
-    });
-  }
-
-  // 라인 조작
-  function markDirty(){ dirty = true; btnRegen.disabled = false; btnPreview.disabled = true; btnCopy.disabled = true; }
-
   function createLine(type, perc){
     const el = document.createElement('div');
-    el.className = type==='h' ? 'line h-line' : 'line v-line';
     overlay.appendChild(el);
-    const obj = { type, perc, el };
+    const obj = {type, perc: Math.max(0, Math.min(1, perc)), el};
     lines.push(obj);
+    applyStyle(el, type);
     layoutLines();
     updateSegmentsUI(true);
     markDirty();
 
-    // 드래그
-    let dragging=false, startClient=0, startPerc=0;
+    // 드래그 이동
+    let dragging=false, startClient=0, startPerc=obj.perc;
     el.addEventListener('mousedown', (e)=>{
-      e.preventDefault(); dragging=true;
-      startClient = (type==='h')? e.clientY : e.clientX;
-      startPerc   = obj.perc;
-
+      if(locked) return;
+      e.preventDefault(); dragging=true; startClient=(type==='h')?e.clientY:e.clientX; startPerc=obj.perc;
       const onMove=(ev)=>{
         if(!dragging) return;
-        const { w, h } = displaySize();
-        const delta = (type==='h') ? (ev.clientY-startClient)/h : (ev.clientX-startClient)/w;
-        obj.perc = Math.max(0, Math.min(1, startPerc+delta));
+        const {w,h}=displaySize();
+        const d=(type==='h')? (ev.clientY-startClient)/h : (ev.clientX-startClient)/w;
+        let next = Math.max(0, Math.min(1, startPerc+d));
+
+        // 스냅: 같은 타입 선 및 경계(0,1)로 흡착
+        if(snapEnabled){
+          const pxTol = snapPx;
+          const currPx = (type==='h') ? next*h : next*w;
+          let snapTargets = [0, (type==='h')?h:w]; // edges
+          lines.forEach(l=>{ if(l!==obj && l.type===type) snapTargets.push((type==='h')? l.perc*h : l.perc*w); });
+          let best = currPx, bestDist = Infinity;
+          for(const t of snapTargets){
+            const dist = Math.abs(currPx - t);
+            if(dist <= pxTol && dist < bestDist){
+              best = t; bestDist = dist;
+            }
+          }
+          if(bestDist !== Infinity){
+            next = (type==='h') ? best/h : best/w;
+          }
+        }
+
+        obj.perc = next;
         layoutLines();
-        // 현재 모드가 이 선의 방향일 때만 썸네일 재계산
-        if ((segMode==='h' && type==='h') || (segMode==='v' && type==='v')) scheduleThumbs();
+        if(segMode==='h'&&type==='h' || segMode==='v'&&type==='v' || segMode==='grid') scheduleThumbs();
         markDirty();
       };
       const onUp=()=>{ dragging=false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); updateSegmentsUI(false); };
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     });
-    return obj;
   }
-
   function deleteNearest(x,y){
-    if (!lines.length) return;
-    const { w,h } = displaySize();
+    if(!lines.length) return;
+    const {w,h}=displaySize();
     let nearest=null, dist=Infinity;
     lines.forEach(l=>{
-      const d = (l.type==='h')? Math.abs(l.perc*h - y) : Math.abs(l.perc*w - x);
-      if (d<dist) {dist=d; nearest=l;}
+      if(!isLineVisible(l)) return; // 보이지 않는 선은 삭제 대상 제외
+      const d=(l.type==='h')?Math.abs(l.perc*h-y):Math.abs(l.perc*w-x);
+      if(d<dist){dist=d; nearest=l;}
     });
-    if (nearest){
+    if(nearest){
       nearest.el.remove();
-      const removedType = nearest.type;
+      const t=nearest.type;
       lines = lines.filter(l=>l!==nearest);
-      if (removedType===segMode) updateSegmentsUI(true);
+      if(segMode==='grid' || segMode===t) updateSegmentsUI(true);
       markDirty();
     }
   }
 
-  function clearLinesUI(){
-    segmentsWrap.innerHTML=''; segLinks=[]; codeTA.value=''; preview.innerHTML='';
-    btnPreview.disabled = true; btnCopy.disabled = true; btnGen.disabled = !image.src;
-  }
-  function clearLines(){ lines.forEach(l=>l.el.remove()); lines=[]; clearLinesUI(); markDirty(); }
-  function fullReset(){ clearLines(); btnGen.disabled=false; btnRegen.disabled=true; btnPreview.disabled=true; btnCopy.disabled=true; lastGeneratedHTML=""; dirty=true; }
-
-  // 클릭: 현재 모드 방향으로 기본 추가, Shift=반대, Alt=삭제
   overlay.addEventListener('click', e=>{
-    if (!image.src) return;
-    const p = pointerInOverlay(e); if (!p.inside) return;
+    if(!image.src) return;
+    const p=pointerInOverlay(e); if(!p.inside) return;
 
-    if (e.altKey)  { deleteNearest(p.x,p.y); return; }
+    if(e.altKey){ deleteNearest(p.x,p.y); return; }
 
-    const addType = e.shiftKey
-      ? (segMode === 'h' ? 'v' : 'h')
-      : segMode;
+    let addType = 'h';
+    if(segMode==='h') addType = e.shiftKey? 'v':'h';
+    else if(segMode==='v') addType = e.shiftKey? 'h':'v';
+    else /* grid */ addType = e.shiftKey? 'v':'h';
 
-    if (addType==='h') createLine('h', p.y/p.h);
-    else               createLine('v', p.x/p.w);
+    if(addType==='h') createLine('h', p.y/p.h);
+    else createLine('v', p.x/p.w);
+  });
+
+  // 라디오 변경 시 보이기/숨기기 및 UI 갱신
+  modeRadios.forEach(r=>r.addEventListener('change', ()=>{
+    segMode = [...modeRadios].find(x=>x.checked).value; // h|v|grid
+    layoutLines();
+    updateSegmentsUI(true);
+    markDirty();
+  }));
+
+  // 균등분할 ---------------------------------------------------
+  function rebuildUniform(type, count){
+    // type: 'h'|'v', count: 조각 수(행 또는 열) => 내부 선은 count-1개
+    lines.filter(l=>l.type===type).forEach(l=>l.el.remove());
+    lines = lines.filter(l=>l.type!==type);
+    if(count<=1){ layoutLines(); updateSegmentsUI(true); return; }
+    const cuts = count - 1;
+    for(let i=1;i<=cuts;i++){
+      const perc = i / count;
+      createLine(type, perc);
+    }
+    layoutLines();
+    updateSegmentsUI(true);
+  }
+
+  btnUniform.addEventListener('click', ()=>{
+    uniformRows = Math.max(1, parseInt(rowsInput.value||'1',10));
+    uniformCols = Math.max(1, parseInt(colsInput.value||'1',10));
+    if(segMode==='h'){
+      rebuildUniform('h', uniformRows);
+    }else if(segMode==='v'){
+      rebuildUniform('v', uniformCols);
+    }else{
+      rebuildUniform('h', uniformRows);
+      rebuildUniform('v', uniformCols);
+    }
+    scheduleThumbs(); markDirty();
+  });
+
+  // 스타일/옵션 변경 ------------------------------------------
+  lockToggle.addEventListener('change', ()=>{ locked = lockToggle.checked; layoutLines(); });
+  snapToggle.addEventListener('change', ()=>{ snapEnabled = snapToggle.checked; });
+  snapTol.addEventListener('input', ()=>{ snapPx = Math.max(0, parseInt(snapTol.value||'0',10)); });
+
+  lineColor.addEventListener('input', ()=>{
+    styleColor = lineColor.value || '#ff4d4f';
+    layoutLines();
+  });
+  lineThickness.addEventListener('input', ()=>{
+    styleThickness = Math.max(1, parseInt(lineThickness.value||'2',10));
+    layoutLines();
   });
 
   // 리사이즈
-  const ro = new ResizeObserver(()=>{ syncOverlaySize(); layoutLines(); scheduleThumbs(); });
+  const ro=new ResizeObserver(()=>{ syncOverlaySize(); layoutLines(); scheduleThumbs(); });
   ro.observe(image); ro.observe(stage);
 
-  btnClearLines.addEventListener('click', clearLines);
+  btnClearLines.addEventListener('click', ()=>{
+    lines.forEach(l=>l.el.remove());
+    lines=[];
+    updateSegmentsUI(true);
+    markDirty();
+  });
 
-  // 세그먼트/썸네일
-  const getPercsSorted = (type) => lines.filter(l=>l.type===type).map(l=>l.perc).sort((a,b)=>a-b);
+  // 세그먼트/썸네일 --------------------------------------------
+  function scheduleThumbs(){ if(thumbRAF) cancelAnimationFrame(thumbRAF); thumbRAF=requestAnimationFrame(renderThumbnails); }
 
   function updateSegmentsUI(regenThumbs){
-    // 현재 모드의 선만 사용하여 경계 생성
-    const cuts = getPercsSorted(segMode);
-    const bounds = [0, ...cuts, 1];
-    const count = Math.max(1, bounds.length-1);
+    let rows=1, cols=1, hCuts=[], vCuts=[];
+    if(segMode==='h'){ hCuts=getPercsSorted('h'); rows=hCuts.length+1; cols=1; }
+    else if(segMode==='v'){ vCuts=getPercsSorted('v'); rows=1; cols=vCuts.length+1; }
+    else{ hCuts=getPercsSorted('h'); vCuts=getPercsSorted('v'); rows=hCuts.length+1; cols=vCuts.length+1; }
+
     const prev = segLinks.slice();
-    segLinks = Array.from({length:count}, (_,i)=> prev[i] ?? "");
+    segLinks = Array.from({length:rows*cols}, (_,i)=> prev[i] ?? "");
 
-    segmentsWrap.innerHTML = "";
-    for (let i=0;i<count;i++){
-      const sizePct = ((bounds[i+1]-bounds[i])*100).toFixed(1);
-      const row = document.createElement('div');
-      row.className='segrow'; row.dataset.idx=i;
+    segmentsWrap.innerHTML="";
+    for(let r=0;r<rows;r++){
+      for(let c=0;c<cols;c++){
+        const idx = r*cols + c;
+        const row = document.createElement('div');
+        row.className='segrow'; row.dataset.idx=idx;
 
-      const left = document.createElement('div');
-      const img  = document.createElement('img'); img.className='thumb'; img.alt = `seg-${i+1}`;
-      left.appendChild(img);
-      const meta = document.createElement('div'); meta.className='segmeta';
-      meta.textContent = (segMode==='h')
-        ? `조각 ${i+1} · 높이 ${sizePct}%`
-        : `조각 ${i+1} · 너비 ${sizePct}%`;
-      left.appendChild(meta);
+        const left = document.createElement('div');
+        const img  = document.createElement('img'); img.className='thumb'; img.alt=`seg-${idx+1}`;
+        left.appendChild(img);
 
-      const input = document.createElement('input');
-      input.type='url'; input.placeholder='https:// 링크 입력'; input.value = segLinks[i] ?? '';
-      input.addEventListener('input', ev=> { segLinks[i] = ev.target.value.trim(); markDirty(); });
+        const meta = document.createElement('div'); meta.className='segmeta';
+        if(segMode==='h') meta.textContent = `조각 ${idx+1} · 행 ${r+1}/${rows}`;
+        else if(segMode==='v') meta.textContent = `조각 ${idx+1} · 열 ${c+1}/${cols}`;
+        else meta.textContent = `조각 ${idx+1} · (${r+1}, ${c+1}) / ${rows}×${cols}`;
+        left.appendChild(meta);
 
-      row.appendChild(left); row.appendChild(input);
-      segmentsWrap.appendChild(row);
+        const input = document.createElement('input');
+        input.type='url'; input.placeholder='https:// 링크 입력'; input.value=segLinks[idx];
+        input.addEventListener('input', ev=>{ segLinks[idx]=ev.target.value.trim(); markDirty(); });
+
+        row.appendChild(left); row.appendChild(input);
+        segmentsWrap.appendChild(row);
+      }
     }
 
     btnGen.disabled = !image.src;
-    btnPreview.disabled = true; btnCopy.disabled = true; codeTA.value=''; preview.innerHTML='';
-    if (regenThumbs) scheduleThumbs();
+    btnPreview.disabled=true; btnCopy.disabled=true; codeTA.value=''; preview.innerHTML='';
+    if(regenThumbs) scheduleThumbs();
   }
 
-  function scheduleThumbs(){ if (thumbRAF) cancelAnimationFrame(thumbRAF); thumbRAF = requestAnimationFrame(renderThumbnails); }
   function renderThumbnails(){
-    thumbRAF = null; if (!image.src) return;
+    thumbRAF=null; if(!image.src) return;
 
-    if (segMode==='h'){
-      // 가로 조각 썸네일: 폭 고정(76px)
-      const cuts = getPercsSorted('h');
-      const ys = [0, ...cuts, 1].map(p => Math.round(p * naturalH));
-      const c = document.createElement('canvas'); const x = c.getContext('2d');
-      for(let i=0;i<ys.length-1;i++){
-        const top=ys[i], h=ys[i+1]-ys[i]; if (h<=0) continue;
-        const W=76, H=Math.max(1, Math.round(h * (W / naturalW)));
-        c.width=W; c.height=H; x.clearRect(0,0,W,H);
-        x.drawImage(image, 0, top, naturalW, h, 0, 0, W, H);
-        const url = c.toDataURL('image/png');
-        const imgEl = segmentsWrap.querySelector(`.segrow[data-idx="${i}"] img.thumb`); if (imgEl) imgEl.src=url;
+    const hPerc=[0,...getPercsSorted('h'),1];
+    const vPerc=[0,...getPercsSorted('v'),1];
+
+    const yPix = hPerc.map(p=>Math.round(p*naturalH));
+    const xPix = vPerc.map(p=>Math.round(p*naturalW));
+
+    const c=document.createElement('canvas'); const ctx=c.getContext('2d');
+
+    if(segMode==='h' || (segMode==='grid' && vPerc.length===2 && hPerc.length>2)){
+      let idx=0;
+      for(let r=0;r<yPix.length-1;r++){
+        const top=yPix[r], h=yPix[r+1]-yPix[r];
+        const W=76, H=Math.max(1, Math.round(h*(W/naturalW)));
+        c.width=W; c.height=H; ctx.clearRect(0,0,W,H);
+        ctx.drawImage(image, 0, top, naturalW, h, 0, 0, W, H);
+        const url=c.toDataURL('image/png');
+        const imgEl=segmentsWrap.querySelector(`.segrow[data-idx="${idx}"] img.thumb`);
+        if(imgEl){ imgEl.src=url; imgEl.style.width=W+'px'; }
+        idx++;
       }
-    } else {
-      // 세로 조각 썸네일: 높이 고정(76px)
-      const cuts = getPercsSorted('v');
-      const xs = [0, ...cuts, 1].map(p => Math.round(p * naturalW));
-      const c = document.createElement('canvas'); const x = c.getContext('2d');
-      for(let i=0;i<xs.length-1;i++){
-        const left=xs[i], w=xs[i+1]-xs[i]; if (w<=0) continue;
-        const H=76, W=Math.max(1, Math.round(w * (H / naturalH)));
-        c.width=W; c.height=H; x.clearRect(0,0,W,H);
-        x.drawImage(image, left, 0, w, naturalH, 0, 0, W, H);
-        const url = c.toDataURL('image/png');
-        const imgEl = segmentsWrap.querySelector(`.segrow[data-idx="${i}"] img.thumb`); if (imgEl) { imgEl.src=url; imgEl.style.width=W+'px'; }
+      if(segMode==='h') return;
+    }
+
+    if(segMode==='v' || (segMode==='grid' && hPerc.length===2 && vPerc.length>2)){
+      let idx=0;
+      for(let cIdx=0;cIdx<xPix.length-1;cIdx++){
+        const left=xPix[cIdx], w=xPix[cIdx+1]-xPix[cIdx];
+        const H=76, W=Math.max(1, Math.round(w*(H/naturalH)));
+        c.width=W; c.height=H; ctx.clearRect(0,0,W,H);
+        ctx.drawImage(image, left, 0, w, naturalH, 0, 0, W, H);
+        const url=c.toDataURL('image/png');
+        const imgEl=segmentsWrap.querySelector(`.segrow[data-idx="${idx}"] img.thumb`);
+        if(imgEl){ imgEl.src=url; imgEl.style.width=W+'px'; }
+        idx++;
+      }
+      if(segMode==='v') return;
+    }
+
+    if(segMode==='grid'){
+      let idx=0;
+      for(let r=0;r<yPix.length-1;r++){
+        for(let cIdx=0;cIdx<xPix.length-1;cIdx++){
+          const top=yPix[r], height=yPix[r+1]-yPix[r];
+          const left=xPix[cIdx], width=xPix[cIdx+1]-xPix[cIdx];
+          if(width<=0||height<=0) { idx++; continue; }
+          const box=76, scale=Math.min(box/width, box/height);
+          const W=Math.max(1, Math.round(width*scale));
+          const H=Math.max(1, Math.round(height*scale));
+          c.width=W; c.height=H; ctx.clearRect(0,0,W,H);
+          ctx.drawImage(image, left, top, width, height, 0, 0, W, H);
+          const url=c.toDataURL('image/png');
+          const imgEl=segmentsWrap.querySelector(`.segrow[data-idx="${idx}"] img.thumb`);
+          if(imgEl){ imgEl.src=url; imgEl.style.width=W+'px'; }
+          idx++;
+        }
       }
     }
   }
 
-  // HTML 생성/재생성/복사
-  async function generateHTML(){
-    if (!image.src) return;
+  // HTML 생성/재생성/복사 --------------------------------------
+  function generateHTML(){
+    if(!image.src) return;
 
-    const canv = document.createElement('canvas');
-    const ctx  = canv.getContext('2d');
+    const hPerc=[0,...getPercsSorted('h'),1];
+    const vPerc=[0,...getPercsSorted('v'),1];
+    const ys=hPerc.map(p=>Math.round(p*naturalH));
+    const xs=vPerc.map(p=>Math.round(p*naturalW));
 
+    const canv=document.createElement('canvas');
+    const ctx=canv.getContext('2d');
     const dataURLs=[];
 
-    if (segMode==='h'){
-      const cuts = getPercsSorted('h');
-      const ys = [0, ...cuts, 1].map(p => Math.round(p * naturalH));
-      canv.width = naturalW;
-      for(let i=0;i<ys.length-1;i++){
-        const top=ys[i], h=ys[i+1]-ys[i]; if (h<=0) continue;
+    if(segMode==='h'){
+      canv.width=naturalW;
+      for(let r=0;r<ys.length-1;r++){
+        const top=ys[r], h=ys[r+1]-ys[r];
         canv.height=h; ctx.clearRect(0,0,canv.width,canv.height);
         ctx.drawImage(image, 0, top, naturalW, h, 0, 0, naturalW, h);
         dataURLs.push(canv.toDataURL('image/png'));
       }
-    } else {
-      const cuts = getPercsSorted('v');
-      const xs = [0, ...cuts, 1].map(p => Math.round(p * naturalW));
-      canv.height = naturalH;
-      for(let i=0;i<xs.length-1;i++){
-        const left=xs[i], w=xs[i+1]-xs[i]; if (w<=0) continue;
+    }else if(segMode==='v'){
+      canv.height=naturalH;
+      for(let cIdx=0;cIdx<xs.length-1;cIdx++){
+        const left=xs[cIdx], w=xs[cIdx+1]-xs[cIdx];
         canv.width=w; ctx.clearRect(0,0,canv.width,canv.height);
         ctx.drawImage(image, left, 0, w, naturalH, 0, 0, w, naturalH);
         dataURLs.push(canv.toDataURL('image/png'));
+      }
+    }else{
+      for(let r=0;r<ys.length-1;r++){
+        for(let cIdx=0;cIdx<xs.length-1;cIdx++){
+          const top=ys[r], h=ys[r+1]-ys[r];
+          const left=xs[cIdx], w=xs[cIdx+1]-xs[cIdx];
+          canv.width=w; canv.height=h; ctx.clearRect(0,0,w,h);
+          ctx.drawImage(image, left, top, w, h, 0, 0, w, h);
+          dataURLs.push(canv.toDataURL('image/png'));
+        }
       }
     }
 
@@ -420,9 +585,8 @@
       return `<a href="${href}" target="_blank" style="display:block;line-height:0;"><img src="${src}" alt="slice-${i+1}" style="display:block;width:100%;height:auto;border:0;"/></a>`;
     }).join("\n");
 
-    lastGeneratedHTML = `<!-- Generated by Link Slicer (${segMode==='h'?'H':'V'}) -->\n<div style="max-width:800px;margin:0 auto;">\n${pieces}\n</div>`;
-    codeTA.value = lastGeneratedHTML;
-    btnPreview.disabled = false; btnCopy.disabled = false; btnRegen.disabled = false; dirty = false;
+    codeTA.value = `<!-- Generated by Link Slicer (${segMode}) -->\n<div style="max-width:800px;margin:0 auto;">\n${pieces}\n</div>`;
+    btnPreview.disabled=false; btnCopy.disabled=false; btnRegen.disabled=false;
 
     // 미리보기
     preview.innerHTML="";
@@ -442,83 +606,92 @@
     catch{ codeTA.select(); document.execCommand("copy"); btnCopy.textContent="복사됨"; setTimeout(()=>btnCopy.textContent="코드 복사",1200); }
   });
 
-  // ===== 상태 저장/불러오기(모드 포함) =====
+  // 상태 저장/불러오기 ------------------------------------------
   function imageToDataURL(){
-    const c=document.createElement('canvas');
-    c.width=naturalW; c.height=naturalH;
-    const x=c.getContext('2d'); x.drawImage(image,0,0);
-    return c.toDataURL('image/png');
+    const c=document.createElement('canvas'); c.width=naturalW; c.height=naturalH;
+    c.getContext('2d').drawImage(image,0,0); return c.toDataURL('image/png');
   }
   function buildState(){
     return {
-      version: 2,
+      version: 5,
       savedAt: new Date().toISOString(),
       mode: segMode,
+      rows: uniformRows,
+      cols: uniformCols,
+      style: { color: styleColor, thickness: styleThickness },
+      options: { locked, snapEnabled, snapPx },
       image: imageToDataURL(),
       naturalWidth: naturalW,
       naturalHeight: naturalH,
-      lines: lines.map(l=>({ type:l.type, perc:l.perc })),
+      lines: lines.map(l=>({type:l.type, perc:l.perc})),
       links: segLinks.slice()
     };
   }
   function downloadJSON(obj, filename){
-    const blob = new Blob([JSON.stringify(obj,null,2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href=url; a.download = filename || 'link-slicer-state.json';
+    const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=filename||'link-slicer-state.json';
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   }
 
-  btnSaveState.addEventListener('click', () => {
-    if (!image.src){ alert('이미지를 먼저 업로드하세요.'); return; }
+  btnSaveState.addEventListener('click', ()=>{
+    if(!image.src){ alert('이미지를 먼저 업로드하세요.'); return; }
     downloadJSON(buildState(), `link-slicer-state-${Date.now()}.json`);
   });
 
-  btnLoadState.addEventListener('click', ()=> stateFile.click());
+  btnLoadState.addEventListener('click', ()=>stateFile.click());
   stateFile.addEventListener('change', async (e)=>{
-    const f = e.target.files?.[0]; if(!f) return;
+    const f=e.target.files?.[0]; if(!f) return;
     try{
-      const text = await f.text();
-      const state = JSON.parse(text);
-      await restoreState(state);
-      alert('상태를 불러왔습니다.');
-    }catch(err){
-      console.error(err);
-      alert('불러오기 실패: 올바른 JSON 파일인지 확인하세요.');
-    }finally{
-      stateFile.value = "";
-    }
+      const text=await f.text(); const state=JSON.parse(text);
+      await restoreState(state); alert('상태를 불러왔습니다.');
+    }catch(err){ console.error(err); alert('불러오기 실패: JSON을 확인하세요.'); }
+    finally{ stateFile.value=""; }
   });
 
   async function restoreState(state){
-    if (!state || !state.image) throw new Error('Invalid state');
+    if(!state || !state.image) throw new Error('Invalid state');
     await new Promise((resolve,reject)=>{
-      image.onload = ()=>{ naturalW=image.naturalWidth; naturalH=image.naturalHeight; stage.style.display='inline-block'; syncOverlaySize(); resolve(); };
-      image.onerror = reject;
-      image.src = state.image;
+      image.onload=()=>{ naturalW=image.naturalWidth; naturalH=image.naturalHeight; stage.style.display='inline-block'; syncOverlaySize(); resolve(); };
+      image.onerror=reject; image.src=state.image;
     });
 
-    // 모드 반영
-    if (state.mode === 'v' || state.mode === 'h') {
-      segMode = state.mode;
-      document.querySelector(`input[name="mode"][value="${segMode}"]`).checked = true;
+    if(['h','v','grid'].includes(state.mode)){ segMode=state.mode; document.querySelector(`input[name="mode"][value="${segMode}"]`).checked=true; }
+
+    if(typeof state.rows==='number') { uniformRows = Math.max(1, state.rows|0); rowsInput.value = uniformRows; }
+    if(typeof state.cols==='number') { uniformCols = Math.max(1, state.cols|0); colsInput.value = uniformCols; }
+
+    if(state.style){
+      styleColor = state.style.color || styleColor;
+      styleThickness = Math.max(1, parseInt(state.style.thickness||styleThickness,10));
+      lineColor.value = styleColor;
+      lineThickness.value = styleThickness;
+    }
+    if(state.options){
+      locked = !!state.options.locked; lockToggle.checked = locked;
+      snapEnabled = !!state.options.snapEnabled; snapToggle.checked = snapEnabled;
+      snapPx = Math.max(0, parseInt(state.options.snapPx||snapPx,10)); snapTol.value = snapPx;
     }
 
-    // 선/링크 복원
-    clearLines();
-    state.lines?.forEach(l => createLine(l.type, Math.max(0, Math.min(1, Number(l.perc)||0))));
+    lines.forEach(l=>l.el.remove()); lines=[];
+    state.lines?.forEach(l=>createLine(l.type, Math.max(0,Math.min(1,Number(l.perc)||0))));
     segLinks = Array.isArray(state.links) ? state.links.slice() : [];
-    updateSegmentsUI(true);
     layoutLines();
+    updateSegmentsUI(true);
     scheduleThumbs();
 
-    codeTA.value = "";
-    preview.innerHTML = "";
-    btnGen.disabled = false; btnRegen.disabled = true; btnCopy.disabled = true; btnPreview.disabled = true;
-    dirty = true; lastGeneratedHTML = "";
+    codeTA.value=""; preview.innerHTML="";
+    btnGen.disabled=false; btnRegen.disabled=true; btnCopy.disabled=true; btnPreview.disabled=true;
   }
+
+  // 초기화 -----------------------------------------------------
+  function clearLinesUI(){ segmentsWrap.innerHTML=''; segLinks=[]; codeTA.value=''; preview.innerHTML=''; btnPreview.disabled=true; btnCopy.disabled=true; btnGen.disabled=!image.src; }
+  function fullReset(){ lines.forEach(l=>l.el.remove()); lines=[]; clearLinesUI(); btnGen.disabled=false; btnRegen.disabled=true; btnPreview.disabled=true; btnCopy.disabled=true; }
 
   // 초기 상태
   btnGen.disabled=true; btnRegen.disabled=true; btnPreview.disabled=true; btnCopy.disabled=true;
+  styleColor = lineColor.value; styleThickness = parseInt(lineThickness.value,10)||2;
+  locked = lockToggle.checked; snapEnabled = snapToggle.checked; snapPx = parseInt(snapTol.value,10)||8;
 })();
 </script>
 </body>

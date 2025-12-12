@@ -3,14 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Link Slicer – 가로/세로/가로x세로 + 균등분할 + 스냅/잠금/스타일</title>
+<title>Link Slicer – 모드별 독립 동작/세그먼트 고정</title>
 <style>
   :root{ --border:#cfd4dc; --muted:#6b7280; --accent:#ff4d4f; --bg:#f7f9fc; --panel:#ffffff; }
   *{box-sizing:border-box}
   html,body{height:100%}
   body{ margin:0; display:flex; min-height:100vh; font-family:system-ui,Segoe UI,Roboto,"Apple SD Gothic Neo",Pretendard,sans-serif; background:var(--bg); color:#111827; }
 
-  /* 사이드바 */
   #sidebar{ width:300px; border-right:1px solid var(--border); background:var(--panel); display:flex; flex-direction:column; }
   .side-header{padding:18px 16px; border-bottom:1px solid var(--border)}
   .side-header h2{margin:0;font-size:18px}
@@ -18,56 +17,40 @@
   .muted{color:var(--muted)}
   footer{padding:10px 12px; border-top:1px solid var(--border); background:#fff; font-size:12px;color:#6b7280}
 
-  /* 업로드 박스 */
-  #dropzone{
-    margin-top:12px; border:2px dashed #9ca3af; border-radius:12px; background:#fafafa;
-    padding:18px; text-align:center; cursor:pointer; transition:all .15s ease;
-  }
+  #dropzone{ margin-top:12px; border:2px dashed #9ca3af; border-radius:12px; background:#fafafa;
+    padding:18px; text-align:center; cursor:pointer; transition:all .15s ease; }
   #dropzone.dragover{ border-color:var(--accent); background:#fff1f1 }
   #fileInput{ display:none }
 
-  /* 메인 */
   #main{ flex:1; display:flex; flex-direction:column; min-width:0; }
   #topbar{ padding:12px; border-bottom:1px solid var(--border); background:#fff; display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
   #topbar button{ appearance:none; border:1px solid var(--border); background:#fff; padding:8px 12px; border-radius:10px; cursor:pointer; }
   #topbar button.primary{ border-color:#dbe3ff; background:#eef3ff }
   #topbar .spacer{ flex:1 }
   .pill{font-size:12px;color:#4b5563}
-  .segmode{display:flex; align-items:center; gap:10px; border:1px solid var(--border); padding:6px 10px; border-radius:10px; background:#fafafa; font-size:14px}
-  .uniform{display:flex; align-items:center; gap:8px; border:1px solid var(--border); padding:6px 10px; border-radius:10px; background:#fafafa; }
-  .uniform input{ width:64px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; }
-  .options{display:flex; align-items:center; gap:10px; border:1px solid var(--border); padding:6px 10px; border-radius:10px; background:#fafafa; }
-  .options input[type="number"]{ width:70px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; }
+  .segmode,.uniform,.options{display:flex; align-items:center; gap:10px; border:1px solid var(--border); padding:6px 10px; border-radius:10px; background:#fafafa; }
+  .uniform input,.options input[type="number"]{ width:64px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; }
   .hint{font-size:12px; color:#6b7280}
 
   #workarea{ display:grid; grid-template-columns:1fr 420px; gap:14px; padding:14px; min-height:0; flex:1; overflow:hidden; }
 
-  /* 캔버스 컨테이너 */
-  #canvas-container{
-    position:relative; overflow:auto; background:#e5e7eb; border:1px solid var(--border); border-radius:10px;
-    display:flex; align-items:flex-start; justify-content:center; padding:18px; min-height:0;
-  }
+  #canvas-container{ position:relative; overflow:auto; background:#e5e7eb; border:1px solid var(--border); border-radius:10px;
+    display:flex; align-items:flex-start; justify-content:center; padding:18px; min-height:0; }
 
-  /* 스테이지/이미지/오버레이 */
   #stage{ position:relative; display:none; }
   #uploadedImage{ display:block; max-width:100%; height:auto; border:1px solid var(--border); background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.05); }
   #overlay{ position:absolute; left:0; top:0; z-index:10; pointer-events:auto; }
 
-  /* 선 */
   .line{ position:absolute; background:var(--accent); cursor:move; box-shadow:0 0 6px rgba(255,77,79,.35); pointer-events:auto; }
   .h-line{ left:0; right:0; }
   .v-line{ top:0;  bottom:0; }
 
-  /* 우측 패널 */
   #rightpanel{ background:#fff; border:1px solid var(--border); border-radius:10px; display:flex; flex-direction:column; min-height:0; }
   #rightpanel header{ padding:12px 12px; border-bottom:1px solid var(--border); font-weight:600 }
   #segments{ padding:12px; overflow:auto; display:flex; flex-direction:column; gap:10px; min-height:0; }
 
-  /* 썸네일 + 입력 */
-  .segrow{
-    display:grid; grid-template-columns:76px 1fr; gap:10px; align-items:center; border:1px solid var(--border);
-    padding:8px; border-radius:10px; background:#fafafa;
-  }
+  .segrow{ display:grid; grid-template-columns:76px 1fr; gap:10px; align-items:center; border:1px solid var(--border);
+    padding:8px; border-radius:10px; background:#fafafa; }
   .thumb{ width:76px; height:auto; border:1px solid var(--border); border-radius:6px; display:block; background:#fff; }
   .segmeta{ font-size:12px; color:#6b7280; margin-top:4px }
   .segrow input{ width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:8px; }
@@ -84,19 +67,18 @@
 </style>
 </head>
 <body>
-
-<!-- 사이드바 -->
 <aside id="sidebar">
   <div class="side-header"><h2>📌 사용법 요약</h2></div>
   <div class="side-body">
     <ol style="margin:0;padding-left:20px">
       <li>이미지 업로드(아래 박스에 <b>드래그&드롭</b> 또는 클릭)</li>
-      <li>현재 선택한 <b>조각 기준</b>에 따라 선을 추가합니다.<br>
-          • 가로/세로: 클릭=해당 방향, Shift=반대 방향<br>
-          • 가로x세로: 클릭=가로선, Shift=세로선</li>
-      <li>Alt+클릭 = 가장 가까운 선 삭제, 드래그=위치 이동</li>
-      <li>필요하면 <b>행/열</b> 숫자를 넣고 “균등분할 적용”으로 자동 생성</li>
-      <li>우측에서 각 조각 링크 입력 → <b>HTML 생성/복사</b></li>
+      <li>조각 기준에 따라 선 추가<br>
+        • 가로: 클릭=가로선만 (Shift 무시)<br>
+        • 세로: 클릭=세로선만 (Shift 무시)<br>
+        • 가로×세로: 클릭=가로, Shift=세로</li>
+      <li>Alt+클릭=가까운(표시중인) 선 삭제, 드래그=이동</li>
+      <li>행/열 숫자 입력 후 “균등분할 적용”으로 자동 배치</li>
+      <li>우측에서 링크 입력 → HTML 생성/복사</li>
     </ol>
     <div id="dropzone">
       <div style="font-weight:600; margin-bottom:4px;">이미지 업로드</div>
@@ -105,10 +87,9 @@
       <input id="fileInput" type="file" accept="image/*">
     </div>
   </div>
-  <footer>모드에 따라 보이는 선이 달라집니다. (가로=가로선만, 세로=세로선만, 가로x세로=모두)</footer>
+  <footer>모드별 선/세그먼트는 서로 독립적으로 동작합니다.</footer>
 </aside>
 
-<!-- 메인 -->
 <main id="main">
   <div id="topbar">
     <button id="btnGen" class="primary" disabled>HTML 생성</button>
@@ -116,14 +97,14 @@
     <button id="btnCopy" disabled>코드 복사</button>
     <span class="spacer"></span>
 
-    <div class="segmode" title="조각을 계산하는 기준">
+    <div class="segmode" title="조각 기준">
       조각 기준:
       <label><input type="radio" name="mode" value="h" checked> 가로</label>
       <label><input type="radio" name="mode" value="v"> 세로</label>
       <label><input type="radio" name="mode" value="grid"> 가로x세로</label>
     </div>
 
-    <div class="uniform" title="균등 간격으로 자동 분할선 생성">
+    <div class="uniform" title="균등 간격 자동 분할">
       Row(행): <input id="rowsInput" type="number" min="1" value="3">
       Col(열): <input id="colsInput" type="number" min="1" value="3">
       <button id="btnUniform">균등분할 적용</button>
@@ -143,11 +124,10 @@
     <button id="btnLoadState" title="저장한 JSON 불러오기">상태 불러오기</button>
     <input id="stateFile" type="file" accept="application/json" />
     <button id="btnClearLines">선 모두 삭제</button>
-    <span class="pill">클릭/Shift/Alt 동작은 상단 설명 참고</span>
+    <span class="pill">Alt 삭제는 “표시중인” 선만 대상</span>
   </div>
 
   <div id="workarea">
-    <!-- 좌측: 이미지/오버레이 -->
     <div id="canvas-container">
       <div id="stage">
         <img id="uploadedImage" alt="업로드 이미지">
@@ -155,7 +135,6 @@
       </div>
     </div>
 
-    <!-- 우측: 링크/코드/미리보기 -->
     <div id="rightpanel">
       <header>조각 링크 입력 + 썸네일</header>
       <div id="segments"></div>
@@ -173,7 +152,6 @@
 
 <script>
 (() => {
-  // 요소 -------------------------------------------------------
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('fileInput');
   const stateFile = document.getElementById('stateFile');
@@ -204,40 +182,35 @@
   const lineColor = document.getElementById('lineColor');
   const lineThickness = document.getElementById('lineThickness');
 
-  // 상태 -------------------------------------------------------
-  let lines = []; // { type:'h'|'v', perc:0..1, el }
+  let lines = []; // { type: 'h'|'v', perc: 0..1, el }
   let naturalW = 0, naturalH = 0;
-  let segLinks = []; // 현재 모드 기준 조각 링크(그리드는 r*c 개)
+  let segLinks = [];
   let thumbRAF = null;
-  let segMode = 'h'; // 'h'|'v'|'grid'
+  let segMode = 'h';
   let uniformRows = 3, uniformCols = 3;
 
-  // 스타일/동작 옵션
   let styleColor = '#ff4d4f';
   let styleThickness = 2;
   let locked = false;
   let snapEnabled = true;
   let snapPx = 8;
 
-  // 유틸 -------------------------------------------------------
   function displaySize(){ return { w: overlay.clientWidth, h: overlay.clientHeight }; }
   function syncOverlaySize(){ overlay.style.width=image.clientWidth+'px'; overlay.style.height=image.clientHeight+'px'; }
-  function isLineVisible(l){
+
+  function isVisibleByMode(l){
     if(segMode==='h') return l.type==='h';
     if(segMode==='v') return l.type==='v';
     return true; // grid
   }
+
   function applyStyle(el, type){
     el.style.background = styleColor;
-    if(type==='h'){
-      el.style.height = styleThickness + 'px';
-      el.className='line h-line';
-    }else{
-      el.style.width  = styleThickness + 'px';
-      el.className='line v-line';
-    }
+    if(type==='h'){ el.style.height = styleThickness + 'px'; el.className='line h-line'; }
+    else          { el.style.width  = styleThickness + 'px'; el.className='line v-line'; }
     el.style.boxShadow = `0 0 6px ${styleColor}55`;
   }
+
   function layoutLines(){
     const {w,h} = displaySize();
     lines.forEach(l=>{
@@ -249,12 +222,18 @@
         l.el.style.left=(l.perc*w - styleThickness/2) + 'px';
       }
       applyStyle(l.el, l.type);
-      l.el.style.display = isLineVisible(l) ? '' : 'none';
-      l.el.style.cursor = locked ? 'default' : 'move';
-      l.el.style.pointerEvents = locked ? 'none' : 'auto';
+      // 표시/포인터 이벤트: 현재 모드 외 선은 보이지 않게 + 클릭 영향 제거
+      const visible = isVisibleByMode(l);
+      l.el.style.display = visible ? '' : 'none';
+      l.el.style.cursor = visible ? (locked ? 'default' : 'move') : 'default';
+      l.el.style.pointerEvents = (visible && !locked) ? 'auto' : 'none';
     });
   }
-  function getPercsSorted(type){ return lines.filter(l=>l.type===type).map(l=>l.perc).sort((a,b)=>a-b); }
+
+  function getPercsSorted(type){
+    // 보이는 선만 세그먼트에 사용 (모드 전환 시 비가시 선은 자동 무시)
+    return lines.filter(l=>l.type===type && isVisibleByMode(l)).map(l=>l.perc).sort((a,b)=>a-b);
+  }
 
   function markDirty(){
     btnRegen.disabled = false;
@@ -264,7 +243,6 @@
     preview.innerHTML = '';
   }
 
-  // 업로드 -----------------------------------------------------
   function loadFile(file){
     if(!file) return;
     const url = URL.createObjectURL(file);
@@ -275,19 +253,20 @@
     };
     image.src=url;
   }
+
   dropzone.addEventListener('click', ()=>fileInput.click());
   fileInput.addEventListener('change', e=>loadFile(e.target.files?.[0]));
   ['dragenter','dragover'].forEach(t=>dropzone.addEventListener(t, e=>{e.preventDefault(); dropzone.classList.add('dragover');}));
   ['dragleave','dragend','drop'].forEach(t=>dropzone.addEventListener(t, ()=>dropzone.classList.remove('dragover')));
   dropzone.addEventListener('drop', e=>{ e.preventDefault(); const f=e.dataTransfer.files?.[0]; if(f?.type.startsWith('image/')) loadFile(f); });
 
-  // 선 생성/삭제/스냅 ------------------------------------------
   function pointerInOverlay(ev){
     const r = overlay.getBoundingClientRect();
     const x = ev.clientX - r.left, y = ev.clientY - r.top;
     const w = overlay.clientWidth, h = overlay.clientHeight;
     return {x,y,w,h, inside:x>=0&&y>=0&&x<=w&&y<=h};
   }
+
   function createLine(type, perc){
     const el = document.createElement('div');
     overlay.appendChild(el);
@@ -298,10 +277,9 @@
     updateSegmentsUI(true);
     markDirty();
 
-    // 드래그 이동
     let dragging=false, startClient=0, startPerc=obj.perc;
     el.addEventListener('mousedown', (e)=>{
-      if(locked) return;
+      if(locked || !isVisibleByMode(obj)) return;
       e.preventDefault(); dragging=true; startClient=(type==='h')?e.clientY:e.clientX; startPerc=obj.perc;
       const onMove=(ev)=>{
         if(!dragging) return;
@@ -309,22 +287,17 @@
         const d=(type==='h')? (ev.clientY-startClient)/h : (ev.clientX-startClient)/w;
         let next = Math.max(0, Math.min(1, startPerc+d));
 
-        // 스냅: 같은 타입 선 및 경계(0,1)로 흡착
         if(snapEnabled){
           const pxTol = snapPx;
           const currPx = (type==='h') ? next*h : next*w;
-          let snapTargets = [0, (type==='h')?h:w]; // edges
-          lines.forEach(l=>{ if(l!==obj && l.type===type) snapTargets.push((type==='h')? l.perc*h : l.perc*w); });
+          let snapTargets = [0, (type==='h')?h:w];
+          lines.forEach(l=>{ if(l!==obj && l.type===type && isVisibleByMode(l)) snapTargets.push((type==='h')? l.perc*h : l.perc*w); });
           let best = currPx, bestDist = Infinity;
           for(const t of snapTargets){
             const dist = Math.abs(currPx - t);
-            if(dist <= pxTol && dist < bestDist){
-              best = t; bestDist = dist;
-            }
+            if(dist <= pxTol && dist < bestDist){ best = t; bestDist = dist; }
           }
-          if(bestDist !== Infinity){
-            next = (type==='h') ? best/h : best/w;
-          }
+          if(bestDist !== Infinity){ next = (type==='h') ? best/h : best/w; }
         }
 
         obj.perc = next;
@@ -339,11 +312,11 @@
   }
 
   function deleteNearest(x,y){
-    if(!lines.length) return;
+    // 삭제도 현재 모드에서 "표시중"인 선만 대상
     const {w,h}=displaySize();
     let nearest=null, dist=Infinity;
     lines.forEach(l=>{
-      if(!isLineVisible(l)) return; // 현재 모드에 보이는 선만 삭제 대상
+      if(!isVisibleByMode(l)) return;
       const d=(l.type==='h')?Math.abs(l.perc*h-y):Math.abs(l.perc*w-x);
       if(d<dist){dist=d; nearest=l;}
     });
@@ -360,43 +333,42 @@
     if(!image.src) return;
     const p=pointerInOverlay(e); if(!p.inside) return;
 
-    // Alt+클릭: 현재 모드에서 보이는 선만 삭제
+    // Alt 삭제: 표시중인 선만
     if(e.altKey){ deleteNearest(p.x,p.y); return; }
 
-    // 현재 모드에서 허용되는 선만 추가
-    // 가로: 무조건 가로선만, 세로: 무조건 세로선만, grid: 클릭=가로, Shift=세로
+    // 모드별 추가 정책
     if(segMode==='h'){
+      // 가로 모드: 클릭=가로선만, Shift 입력 무시
+      if(e.shiftKey) return;
       createLine('h', p.y/p.h);
       return;
     }
     if(segMode==='v'){
+      // 세로 모드: 클릭=세로선만, Shift 입력 무시
+      if(e.shiftKey) return;
       createLine('v', p.x/p.w);
       return;
     }
-    // grid
+    // grid: 클릭=가로, Shift=세로
     const addType = e.shiftKey ? 'v' : 'h';
     if(addType==='h') createLine('h', p.y/p.h); else createLine('v', p.x/p.w);
   });
 
-  // 라디오 변경 시 보이기/숨기기 및 UI 갱신
+  // 모드 전환: 비가시 선 자동 무시 + 세그먼트 재계산 고정(해당 모드 기준으로만)
   modeRadios.forEach(r=>r.addEventListener('change', ()=>{
-    segMode = [...modeRadios].find(x=>x.checked).value; // h|v|grid
-    layoutLines();             // 표시/포인터 이벤트 즉시 반영
-    updateSegmentsUI(true);    // 조각/썸네일도 현재 모드 기준으로
+    segMode = [...modeRadios].find(x=>x.checked).value; // 'h'|'v'|'grid'
+    layoutLines();          // 가시/비가시 반영
+    updateSegmentsUI(true); // 현재 모드 선만으로 조각 재계산
     markDirty();
   }));
 
-  // 균등분할 ---------------------------------------------------
   function rebuildUniform(type, count){
-    // type: 'h'|'v', count: 조각 수(행 또는 열) => 내부 선은 count-1개
+    // 내부 선은 count-1개. 현재 타입만 건드림(다른 타입 선은 유지되어 다른 모드에서 재사용 가능)
     lines.filter(l=>l.type===type).forEach(l=>l.el.remove());
     lines = lines.filter(l=>l.type!==type);
     if(count<=1){ layoutLines(); updateSegmentsUI(true); return; }
     const cuts = count - 1;
-    for(let i=1;i<=cuts;i++){
-      const perc = i / count;
-      createLine(type, perc);
-    }
+    for(let i=1;i<=cuts;i++){ createLine(type, i/count); }
     layoutLines();
     updateSegmentsUI(true);
   }
@@ -406,36 +378,24 @@
     const cols = Math.max(1, parseInt(colsInput.value||'1',10));
     uniformRows = rows; uniformCols = cols;
 
-    if(segMode==='h'){
-      rebuildUniform('h', rows);
-    }else if(segMode==='v'){
-      rebuildUniform('v', cols);
-    }else{
-      rebuildUniform('h', rows);
-      rebuildUniform('v', cols);
-    }
+    if(segMode==='h'){ rebuildUniform('h', rows); }
+    else if(segMode==='v'){ rebuildUniform('v', cols); }
+    else { rebuildUniform('h', rows); rebuildUniform('v', cols); }
     scheduleThumbs(); markDirty();
   });
 
-  // 스타일/옵션 변경 ------------------------------------------
+  // 옵션
   lockToggle.addEventListener('change', ()=>{ locked = lockToggle.checked; layoutLines(); });
   snapToggle.addEventListener('change', ()=>{ snapEnabled = snapToggle.checked; });
   snapTol.addEventListener('input', ()=>{ snapPx = Math.max(0, parseInt(snapTol.value||'0',10)); });
+  lineColor.addEventListener('input', ()=>{ styleColor = lineColor.value || '#ff4d4f'; layoutLines(); });
+  lineThickness.addEventListener('input', ()=>{ styleThickness = Math.max(1, parseInt(lineThickness.value||'2',10)); layoutLines(); });
 
-  lineColor.addEventListener('input', ()=>{
-    styleColor = lineColor.value || '#ff4d4f';
-    layoutLines();
-  });
-  lineThickness.addEventListener('input', ()=>{
-    styleThickness = Math.max(1, parseInt(lineThickness.value||'2',10));
-    layoutLines();
-  });
-
-  // 리사이즈
+  // 리사이즈 시 위치 재계산(표시중 선만)
   const ro=new ResizeObserver(()=>{ syncOverlaySize(); layoutLines(); scheduleThumbs(); });
   ro.observe(image); ro.observe(stage);
 
-  // “선 모두 삭제” → 현재 모드의 선만 삭제
+  // “선 모두 삭제” → 현재 모드의 선만 삭제 (다른 모드 선은 보존)
   btnClearLines.addEventListener('click', ()=>{
     const shouldRemove = (l)=>{
       if(segMode==='h') return l.type==='h';
@@ -448,10 +408,10 @@
     markDirty();
   });
 
-  // 세그먼트/썸네일 --------------------------------------------
   function scheduleThumbs(){ if(thumbRAF) cancelAnimationFrame(thumbRAF); thumbRAF=requestAnimationFrame(renderThumbnails); }
 
   function updateSegmentsUI(regenThumbs){
+    // 현재 모드의 "가시 선"만 조각 계산에 사용
     let rows=1, cols=1, hCuts=[], vCuts=[];
     if(segMode==='h'){ hCuts=getPercsSorted('h'); rows=hCuts.length+1; cols=1; }
     else if(segMode==='v'){ vCuts=getPercsSorted('v'); rows=1; cols=vCuts.length+1; }
@@ -497,15 +457,15 @@
     const hPerc=[0,...getPercsSorted('h'),1];
     const vPerc=[0,...getPercsSorted('v'),1];
 
-    const yPix = hPerc.map(p=>Math.round(p*naturalH));
-    const xPix = vPerc.map(p=>Math.round(p*naturalW));
+    const ys=hPerc.map(p=>Math.round(p*naturalH));
+    const xs=vPerc.map(p=>Math.round(p*naturalW));
 
     const c=document.createElement('canvas'); const ctx=c.getContext('2d');
 
-    if(segMode==='h' || (segMode==='grid' && vPerc.length===2 && hPerc.length>2)){
+    if(segMode==='h'){
       let idx=0;
-      for(let r=0;r<yPix.length-1;r++){
-        const top=yPix[r], h=yPix[r+1]-yPix[r];
+      for(let r=0;r<ys.length-1;r++){
+        const top=ys[r], h=ys[r+1]-ys[r];
         const W=76, H=Math.max(1, Math.round(h*(W/naturalW)));
         c.width=W; c.height=H; ctx.clearRect(0,0,W,H);
         ctx.drawImage(image, 0, top, naturalW, h, 0, 0, W, H);
@@ -514,13 +474,13 @@
         if(imgEl){ imgEl.src=url; imgEl.style.width=W+'px'; }
         idx++;
       }
-      if(segMode==='h') return;
+      return;
     }
 
-    if(segMode==='v' || (segMode==='grid' && hPerc.length===2 && vPerc.length>2)){
+    if(segMode==='v'){
       let idx=0;
-      for(let cIdx=0;cIdx<xPix.length-1;cIdx++){
-        const left=xPix[cIdx], w=xPix[cIdx+1]-xPix[cIdx];
+      for(let ci=0;ci<xs.length-1;ci++){
+        const left=xs[ci], w=xs[ci+1]-xs[ci];
         const H=76, W=Math.max(1, Math.round(w*(H/naturalH)));
         c.width=W; c.height=H; ctx.clearRect(0,0,W,H);
         ctx.drawImage(image, left, 0, w, naturalH, 0, 0, W, H);
@@ -529,31 +489,29 @@
         if(imgEl){ imgEl.src=url; imgEl.style.width=W+'px'; }
         idx++;
       }
-      if(segMode==='v') return;
+      return;
     }
 
-    if(segMode==='grid'){
-      let idx=0;
-      for(let r=0;r<yPix.length-1;r++){
-        for(let cIdx=0;cIdx<xPix.length-1;cIdx++){
-          const top=yPix[r], height=yPix[r+1]-yPix[r];
-          const left=xPix[cIdx], width=xPix[cIdx+1]-xPix[cIdx];
-          if(width<=0||height<=0) { idx++; continue; }
-          const box=76, scale=Math.min(box/width, box/height);
-          const W=Math.max(1, Math.round(width*scale));
-          const H=Math.max(1, Math.round(height*scale));
-          c.width=W; c.height=H; ctx.clearRect(0,0,W,H);
-          ctx.drawImage(image, left, top, width, height, 0, 0, W, H);
-          const url=c.toDataURL('image/png');
-          const imgEl=segmentsWrap.querySelector(`.segrow[data-idx="${idx}"] img.thumb`);
-          if(imgEl){ imgEl.src=url; imgEl.style.width=W+'px'; }
-          idx++;
-        }
+    // grid
+    let idx=0;
+    for(let r=0;r<ys.length-1;r++){
+      for(let ci=0;ci<xs.length-1;ci++){
+        const top=ys[r], h=ys[r+1]-ys[r];
+        const left=xs[ci], w=xs[ci+1]-xs[ci];
+        if(w<=0||h<=0){ idx++; continue; }
+        const box=76, scale=Math.min(box/w, box/h);
+        const W=Math.max(1, Math.round(w*scale));
+        const H=Math.max(1, Math.round(h*scale));
+        c.width=W; c.height=H; ctx.clearRect(0,0,W,H);
+        ctx.drawImage(image, left, top, w, h, 0, 0, W, H);
+        const url=c.toDataURL('image/png');
+        const imgEl=segmentsWrap.querySelector(`.segrow[data-idx="${idx}"] img.thumb`);
+        if(imgEl){ imgEl.src=url; imgEl.style.width=W+'px'; }
+        idx++;
       }
     }
   }
 
-  // HTML 생성/재생성/복사 --------------------------------------
   function generateHTML(){
     if(!image.src) return;
 
@@ -576,17 +534,17 @@
       }
     }else if(segMode==='v'){
       canv.height=naturalH;
-      for(let cIdx=0;cIdx<xs.length-1;cIdx++){
-        const left=xs[cIdx], w=xs[cIdx+1]-xs[cIdx];
+      for(let ci=0;ci<xs.length-1;ci++){
+        const left=xs[ci], w=xs[ci+1]-xs[ci];
         canv.width=w; ctx.clearRect(0,0,canv.width,canv.height);
         ctx.drawImage(image, left, 0, w, naturalH, 0, 0, w, naturalH);
         dataURLs.push(canv.toDataURL('image/png'));
       }
     }else{
       for(let r=0;r<ys.length-1;r++){
-        for(let cIdx=0;cIdx<xs.length-1;cIdx++){
+        for(let ci=0;ci<xs.length-1;ci++){
           const top=ys[r], h=ys[r+1]-ys[r];
-          const left=xs[cIdx], w=xs[cIdx+1]-xs[cIdx];
+          const left=xs[ci], w=xs[ci+1]-xs[ci];
           canv.width=w; canv.height=h; ctx.clearRect(0,0,w,h);
           ctx.drawImage(image, left, top, w, h, 0, 0, w, h);
           dataURLs.push(canv.toDataURL('image/png'));
@@ -602,7 +560,6 @@
     codeTA.value = `<!-- Generated by Link Slicer (${segMode}) -->\n<div style="max-width:800px;margin:0 auto;">\n${pieces}\n</div>`;
     btnPreview.disabled=false; btnCopy.disabled=false; btnRegen.disabled=false;
 
-    // 미리보기
     preview.innerHTML="";
     dataURLs.forEach((src,i)=>{
       const a=document.createElement('a'); a.href=segLinks[i]||"#"; a.target="_blank";
@@ -620,14 +577,13 @@
     catch{ codeTA.select(); document.execCommand("copy"); btnCopy.textContent="복사됨"; setTimeout(()=>btnCopy.textContent="코드 복사",1200); }
   });
 
-  // 상태 저장/불러오기 ------------------------------------------
   function imageToDataURL(){
     const c=document.createElement('canvas'); c.width=naturalW; c.height=naturalH;
     c.getContext('2d').drawImage(image,0,0); return c.toDataURL('image/png');
   }
   function buildState(){
     return {
-      version: 6,
+      version: 7,
       savedAt: new Date().toISOString(),
       mode: segMode,
       rows: uniformRows,
@@ -671,15 +627,13 @@
     });
 
     if(['h','v','grid'].includes(state.mode)){ segMode=state.mode; document.querySelector(`input[name="mode"][value="${segMode}"]`).checked=true; }
-
     if(typeof state.rows==='number') { uniformRows = Math.max(1, state.rows|0); rowsInput.value = uniformRows; }
     if(typeof state.cols==='number') { uniformCols = Math.max(1, state.cols|0); colsInput.value = uniformCols; }
 
     if(state.style){
       styleColor = state.style.color || styleColor;
       styleThickness = Math.max(1, parseInt(state.style.thickness||styleThickness,10));
-      lineColor.value = styleColor;
-      lineThickness.value = styleThickness;
+      lineColor.value = styleColor; lineThickness.value = styleThickness;
     }
     if(state.options){
       locked = !!state.options.locked; lockToggle.checked = locked;
@@ -698,7 +652,6 @@
     btnGen.disabled=false; btnRegen.disabled=true; btnCopy.disabled=true; btnPreview.disabled=true;
   }
 
-  // 초기화 -----------------------------------------------------
   function clearLinesUI(){ segmentsWrap.innerHTML=''; segLinks=[]; codeTA.value=''; preview.innerHTML=''; btnPreview.disabled=true; btnCopy.disabled=true; btnGen.disabled=!image.src; }
   function fullReset(){ lines.forEach(l=>l.el.remove()); lines=[]; clearLinesUI(); btnGen.disabled=false; btnRegen.disabled=true; btnPreview.disabled=true; btnCopy.disabled=true; }
 

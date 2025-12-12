@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Link Slicer – 분할선 & 링크 생성기(썸네일·재생성·저장/불러오기)</title>
+<title>Link Slicer – 가로/세로 조각 링크 생성</title>
 <style>
   :root{ --border:#cfd4dc; --muted:#6b7280; --accent:#ff4d4f; --bg:#f7f9fc; --panel:#ffffff; }
   *{box-sizing:border-box}
   html,body{height:100%}
   body{ margin:0; display:flex; min-height:100vh; font-family:system-ui,Segoe UI,Roboto,"Apple SD Gothic Neo",Pretendard,sans-serif; background:var(--bg); color:#111827; }
 
-  /* 왼쪽: 사용법 + 업로드 */
+  /* 사이드바 */
   #sidebar{ width:300px; border-right:1px solid var(--border); background:var(--panel); display:flex; flex-direction:column; }
   .side-header{padding:18px 16px; border-bottom:1px solid var(--border)}
   .side-header h2{margin:0;font-size:18px}
@@ -19,7 +19,7 @@
   ul{margin:8px 0 0 18px}
   footer{padding:10px 12px; border-top:1px solid var(--border); background:#fff; font-size:12px;color:#6b7280}
 
-  /* 드래그&드롭 업로드 박스 */
+  /* 업로드 박스 */
   #dropzone{
     margin-top:12px; border:2px dashed #9ca3af; border-radius:12px; background:#fafafa;
     padding:18px; text-align:center; cursor:pointer; transition:all .15s ease;
@@ -27,27 +27,26 @@
   #dropzone.dragover{ border-color:var(--accent); background:#fff1f1 }
   #fileInput{ display:none }
 
-  /* 가운데: 작업 영역 */
+  /* 메인 */
   #main{ flex:1; display:flex; flex-direction:column; min-width:0; }
   #topbar{ padding:12px; border-bottom:1px solid var(--border); background:#fff; display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
   #topbar button{ appearance:none; border:1px solid var(--border); background:#fff; padding:8px 12px; border-radius:10px; cursor:pointer; }
   #topbar button.primary{ border-color:#dbe3ff; background:#eef3ff }
-  #topbar .pill{font-size:12px;color:#4b5563}
   #topbar .spacer{ flex:1 }
+  .pill{font-size:12px;color:#4b5563}
+  .segmode{display:flex; align-items:center; gap:6px; border:1px solid var(--border); padding:6px 10px; border-radius:10px; background:#fafafa; font-size:14px}
 
   #workarea{ display:grid; grid-template-columns:1fr 380px; gap:14px; padding:14px; min-height:0; flex:1; overflow:hidden; }
 
-  /* 캔버스 컨테이너(스크롤 영역) */
+  /* 캔버스 컨테이너 */
   #canvas-container{
     position:relative; overflow:auto; background:#e5e7eb; border:1px solid var(--border); border-radius:10px;
     display:flex; align-items:flex-start; justify-content:center; padding:18px; min-height:0;
   }
 
-  /* 스테이지: 이미지 + 오버레이 묶음 */
+  /* 스테이지/이미지/오버레이 */
   #stage{ position:relative; display:none; }
   #uploadedImage{ display:block; max-width:100%; height:auto; border:1px solid var(--border); background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.05); }
-
-  /* 오버레이 */
   #overlay{ position:absolute; left:0; top:0; z-index:10; pointer-events:auto; }
 
   /* 선 */
@@ -55,7 +54,7 @@
   .h-line{ height:2px; left:0; right:0; }
   .v-line{ width:2px;  top:0;  bottom:0; }
 
-  /* 우측: 링크/코드/미리보기 */
+  /* 우측 패널 */
   #rightpanel{ background:#fff; border:1px solid var(--border); border-radius:10px; display:flex; flex-direction:column; min-height:0; }
   #rightpanel header{ padding:12px 12px; border-bottom:1px solid var(--border); font-weight:600 }
   #segments{ padding:12px; overflow:auto; display:flex; flex-direction:column; gap:10px; min-height:0; }
@@ -75,7 +74,6 @@
   #previewwrap{ padding:12px; border-top:1px solid var(--border); }
   #preview{ display:flex; flex-direction:column; gap:4px; }
 
-  /* 저장/불러오기 입력 숨김 */
   #stateFile{ display:none }
 
   @media (max-width: 1120px){ #workarea{ grid-template-columns:1fr; } }
@@ -89,14 +87,8 @@
   <div class="side-body">
     <ol style="margin:0;padding-left:20px">
       <li>이미지 업로드(아래 박스에 <b>드래그&드롭</b> 또는 클릭)</li>
-      <li>이미지 위 클릭:
-        <ul>
-          <li>일반 클릭 → <b>가로선</b></li>
-          <li><kbd>Shift</kbd>+클릭 → <b>세로선</b></li>
-          <li><kbd>Alt</kbd>+클릭 → <b>가까운 선 삭제</b></li>
-        </ul>
-      </li>
-      <li>선을 드래그하여 위치 조정</li>
+      <li>이미지 위 클릭(현재 선택한 <b>조각 기준</b> 방향으로 선 추가)</li>
+      <li>Shift+클릭 = 반대 방향 선 추가, Alt+클릭 = 가까운 선 삭제</li>
       <li>우측 패널에서 각 조각 <b>링크</b> 입력 → <b>HTML 생성/복사</b></li>
     </ol>
     <div id="dropzone">
@@ -106,7 +98,7 @@
       <input id="fileInput" type="file" accept="image/*">
     </div>
   </div>
-  <footer>긴 이미지도 정확히 표시됩니다. 가로선 기준으로 조각·썸네일을 구성합니다.</footer>
+  <footer>가로/세로 모드를 바꿔 원하는 방향으로 조각을 생성하세요.</footer>
 </aside>
 
 <!-- 메인 -->
@@ -116,11 +108,19 @@
     <button id="btnRegen" disabled>HTML 재생성</button>
     <button id="btnCopy" disabled>코드 복사</button>
     <span class="spacer"></span>
+
+    <div class="segmode" title="조각을 계산하는 기준 방향">
+      조각 기준:
+      <label><input type="radio" name="mode" value="h" checked> 가로</label>
+      <label><input type="radio" name="mode" value="v"> 세로</label>
+    </div>
+
+    <span class="spacer"></span>
     <button id="btnSaveState" title="현재 작업 저장(JSON 다운로드)">상태 저장</button>
     <button id="btnLoadState" title="저장한 JSON 불러오기">상태 불러오기</button>
     <input id="stateFile" type="file" accept="application/json" />
     <button id="btnClearLines">선 모두 삭제</button>
-    <span class="pill">일반 클릭=가로 | Shift=세로 | Alt=삭제</span>
+    <span class="pill">클릭=현재 기준 / Shift=반대 / Alt=삭제</span>
   </div>
 
   <div id="workarea">
@@ -134,7 +134,7 @@
 
     <!-- 우측: 링크/코드/미리보기 -->
     <div id="rightpanel">
-      <header>조각 링크 입력(가로선 기준) + 썸네일</header>
+      <header>조각 링크 입력 + 썸네일</header>
       <div id="segments"></div>
       <div id="codebox">
         <button id="btnPreview" disabled>미리보기 생성</button>
@@ -170,13 +170,23 @@
   const codeTA = document.getElementById('code');
   const preview = document.getElementById('preview');
 
+  const modeRadios = document.querySelectorAll('input[name="mode"]');
+
   // 상태
   let lines = []; // { type: 'h'|'v', perc: number, el: HTMLElement }
   let naturalW = 0, naturalH = 0;
-  let segLinks = []; // 각 조각 링크
-  let thumbRAF = null; // 썸네일 디바운스용
-  let lastGeneratedHTML = ""; // 재생성/복사용
-  let dirty = true; // 라인/링크가 바뀐 상태
+  let segLinks = []; // 조각 링크(현재 모드 기준)
+  let thumbRAF = null;
+  let lastGeneratedHTML = "";
+  let dirty = true;
+  let segMode = 'h'; // 'h' = 가로 기준, 'v' = 세로 기준
+
+  // 모드 변경
+  modeRadios.forEach(r => r.addEventListener('change', () => {
+    segMode = [...modeRadios].find(x=>x.checked).value; // 'h' or 'v'
+    updateSegmentsUI(true);
+    markDirty();
+  }));
 
   // 업로드
   function loadFile(file){
@@ -246,7 +256,8 @@
         const delta = (type==='h') ? (ev.clientY-startClient)/h : (ev.clientX-startClient)/w;
         obj.perc = Math.max(0, Math.min(1, startPerc+delta));
         layoutLines();
-        if (type==='h') scheduleThumbs();
+        // 현재 모드가 이 선의 방향일 때만 썸네일 재계산
+        if ((segMode==='h' && type==='h') || (segMode==='v' && type==='v')) scheduleThumbs();
         markDirty();
       };
       const onUp=()=>{ dragging=false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); updateSegmentsUI(false); };
@@ -266,26 +277,33 @@
     });
     if (nearest){
       nearest.el.remove();
+      const removedType = nearest.type;
       lines = lines.filter(l=>l!==nearest);
-      if (nearest.type==='h') updateSegmentsUI(true);
+      if (removedType===segMode) updateSegmentsUI(true);
       markDirty();
     }
   }
 
   function clearLinesUI(){
     segmentsWrap.innerHTML=''; segLinks=[]; codeTA.value=''; preview.innerHTML='';
-    btnPreview.disabled = true; btnCopy.disabled = true; btnGen.disabled = lines.filter(l=>l.type==='h').length===0;
+    btnPreview.disabled = true; btnCopy.disabled = true; btnGen.disabled = !image.src;
   }
   function clearLines(){ lines.forEach(l=>l.el.remove()); lines=[]; clearLinesUI(); markDirty(); }
   function fullReset(){ clearLines(); btnGen.disabled=false; btnRegen.disabled=true; btnPreview.disabled=true; btnCopy.disabled=true; lastGeneratedHTML=""; dirty=true; }
 
-  // 클릭(Alt=삭제 / Shift=세로 / 기본=가로)
+  // 클릭: 현재 모드 방향으로 기본 추가, Shift=반대, Alt=삭제
   overlay.addEventListener('click', e=>{
     if (!image.src) return;
     const p = pointerInOverlay(e); if (!p.inside) return;
+
     if (e.altKey)  { deleteNearest(p.x,p.y); return; }
-    if (e.shiftKey){ createLine('v', p.x/p.w); return; }
-    createLine('h', p.y/p.h);
+
+    const addType = e.shiftKey
+      ? (segMode === 'h' ? 'v' : 'h')
+      : segMode;
+
+    if (addType==='h') createLine('h', p.y/p.h);
+    else               createLine('v', p.x/p.w);
   });
 
   // 리사이즈
@@ -295,10 +313,11 @@
   btnClearLines.addEventListener('click', clearLines);
 
   // 세그먼트/썸네일
-  function getHorizontalPercsSorted(){ return lines.filter(l=>l.type==='h').map(l=>l.perc).sort((a,b)=>a-b); }
+  const getPercsSorted = (type) => lines.filter(l=>l.type===type).map(l=>l.perc).sort((a,b)=>a-b);
 
   function updateSegmentsUI(regenThumbs){
-    const cuts = getHorizontalPercsSorted();
+    // 현재 모드의 선만 사용하여 경계 생성
+    const cuts = getPercsSorted(segMode);
     const bounds = [0, ...cuts, 1];
     const count = Math.max(1, bounds.length-1);
     const prev = segLinks.slice();
@@ -306,14 +325,17 @@
 
     segmentsWrap.innerHTML = "";
     for (let i=0;i<count;i++){
-      const heightPct = ((bounds[i+1]-bounds[i])*100).toFixed(1);
+      const sizePct = ((bounds[i+1]-bounds[i])*100).toFixed(1);
       const row = document.createElement('div');
       row.className='segrow'; row.dataset.idx=i;
 
       const left = document.createElement('div');
       const img  = document.createElement('img'); img.className='thumb'; img.alt = `seg-${i+1}`;
       left.appendChild(img);
-      const meta = document.createElement('div'); meta.className='segmeta'; meta.textContent = `조각 ${i+1} · 높이 ${heightPct}%`;
+      const meta = document.createElement('div'); meta.className='segmeta';
+      meta.textContent = (segMode==='h')
+        ? `조각 ${i+1} · 높이 ${sizePct}%`
+        : `조각 ${i+1} · 너비 ${sizePct}%`;
       left.appendChild(meta);
 
       const input = document.createElement('input');
@@ -324,50 +346,73 @@
       segmentsWrap.appendChild(row);
     }
 
-    btnGen.disabled = !image.src || count<1;
+    btnGen.disabled = !image.src;
     btnPreview.disabled = true; btnCopy.disabled = true; codeTA.value=''; preview.innerHTML='';
     if (regenThumbs) scheduleThumbs();
   }
 
-  // 썸네일 생성(디바운스)
   function scheduleThumbs(){ if (thumbRAF) cancelAnimationFrame(thumbRAF); thumbRAF = requestAnimationFrame(renderThumbnails); }
   function renderThumbnails(){
     thumbRAF = null; if (!image.src) return;
-    const cuts = getHorizontalPercsSorted();
-    const boundsPerc = [0, ...cuts, 1];
-    const ys = boundsPerc.map(p => Math.round(p * naturalH));
 
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-
-    for(let i=0;i<ys.length-1;i++){
-      const top = ys[i], height = ys[i+1]-ys[i]; if (height<=0) continue;
-      const thumbW = 76, thumbH = Math.max(1, Math.round(height * (thumbW / naturalW)));
-      canvas.width = thumbW; canvas.height = thumbH;
-      ctx.clearRect(0,0,thumbW,thumbH);
-      ctx.drawImage(image, 0, top, naturalW, height, 0, 0, thumbW, thumbH);
-      const url = canvas.toDataURL('image/png');
-      const row = segmentsWrap.querySelector(`.segrow[data-idx="${i}"] img.thumb`);
-      if (row) row.src = url;
+    if (segMode==='h'){
+      // 가로 조각 썸네일: 폭 고정(76px)
+      const cuts = getPercsSorted('h');
+      const ys = [0, ...cuts, 1].map(p => Math.round(p * naturalH));
+      const c = document.createElement('canvas'); const x = c.getContext('2d');
+      for(let i=0;i<ys.length-1;i++){
+        const top=ys[i], h=ys[i+1]-ys[i]; if (h<=0) continue;
+        const W=76, H=Math.max(1, Math.round(h * (W / naturalW)));
+        c.width=W; c.height=H; x.clearRect(0,0,W,H);
+        x.drawImage(image, 0, top, naturalW, h, 0, 0, W, H);
+        const url = c.toDataURL('image/png');
+        const imgEl = segmentsWrap.querySelector(`.segrow[data-idx="${i}"] img.thumb`); if (imgEl) imgEl.src=url;
+      }
+    } else {
+      // 세로 조각 썸네일: 높이 고정(76px)
+      const cuts = getPercsSorted('v');
+      const xs = [0, ...cuts, 1].map(p => Math.round(p * naturalW));
+      const c = document.createElement('canvas'); const x = c.getContext('2d');
+      for(let i=0;i<xs.length-1;i++){
+        const left=xs[i], w=xs[i+1]-xs[i]; if (w<=0) continue;
+        const H=76, W=Math.max(1, Math.round(w * (H / naturalH)));
+        c.width=W; c.height=H; x.clearRect(0,0,W,H);
+        x.drawImage(image, left, 0, w, naturalH, 0, 0, W, H);
+        const url = c.toDataURL('image/png');
+        const imgEl = segmentsWrap.querySelector(`.segrow[data-idx="${i}"] img.thumb`); if (imgEl) { imgEl.src=url; imgEl.style.width=W+'px'; }
+      }
     }
   }
 
-  // HTML 생성 / 재생성 / 복사
+  // HTML 생성/재생성/복사
   async function generateHTML(){
     if (!image.src) return;
-    const cuts = getHorizontalPercsSorted();
-    const boundsPerc = [0, ...cuts, 1];
-    const ys = boundsPerc.map(p => Math.round(p * naturalH));
 
-    const canv = document.createElement('canvas'); canv.width = naturalW;
-    const ctx = canv.getContext('2d');
+    const canv = document.createElement('canvas');
+    const ctx  = canv.getContext('2d');
 
     const dataURLs=[];
-    for(let i=0;i<ys.length-1;i++){
-      const top=ys[i], h=ys[i+1]-ys[i]; if (h<=0) continue;
-      canv.height=h; ctx.clearRect(0,0,canv.width,canv.height);
-      ctx.drawImage(image, 0, top, naturalW, h, 0, 0, naturalW, h);
-      dataURLs.push(canv.toDataURL('image/png'));
+
+    if (segMode==='h'){
+      const cuts = getPercsSorted('h');
+      const ys = [0, ...cuts, 1].map(p => Math.round(p * naturalH));
+      canv.width = naturalW;
+      for(let i=0;i<ys.length-1;i++){
+        const top=ys[i], h=ys[i+1]-ys[i]; if (h<=0) continue;
+        canv.height=h; ctx.clearRect(0,0,canv.width,canv.height);
+        ctx.drawImage(image, 0, top, naturalW, h, 0, 0, naturalW, h);
+        dataURLs.push(canv.toDataURL('image/png'));
+      }
+    } else {
+      const cuts = getPercsSorted('v');
+      const xs = [0, ...cuts, 1].map(p => Math.round(p * naturalW));
+      canv.height = naturalH;
+      for(let i=0;i<xs.length-1;i++){
+        const left=xs[i], w=xs[i+1]-xs[i]; if (w<=0) continue;
+        canv.width=w; ctx.clearRect(0,0,canv.width,canv.height);
+        ctx.drawImage(image, left, 0, w, naturalH, 0, 0, w, naturalH);
+        dataURLs.push(canv.toDataURL('image/png'));
+      }
     }
 
     const pieces = dataURLs.map((src,i)=>{
@@ -375,7 +420,7 @@
       return `<a href="${href}" target="_blank" style="display:block;line-height:0;"><img src="${src}" alt="slice-${i+1}" style="display:block;width:100%;height:auto;border:0;"/></a>`;
     }).join("\n");
 
-    lastGeneratedHTML = `<!-- Generated by Link Slicer -->\n<div style="max-width:800px;margin:0 auto;">\n${pieces}\n</div>`;
+    lastGeneratedHTML = `<!-- Generated by Link Slicer (${segMode==='h'?'H':'V'}) -->\n<div style="max-width:800px;margin:0 auto;">\n${pieces}\n</div>`;
     codeTA.value = lastGeneratedHTML;
     btnPreview.disabled = false; btnCopy.disabled = false; btnRegen.disabled = false; dirty = false;
 
@@ -390,38 +435,32 @@
   }
 
   btnGen.addEventListener('click', generateHTML);
-  btnRegen.addEventListener('click', () => {
-    // 변경 여부와 상관없이 다시 슬라이스/생성
-    generateHTML();
-  });
-
+  btnRegen.addEventListener('click', generateHTML);
   btnPreview.addEventListener('click', ()=> alert('미리보기가 아래에 표시되었습니다.'));
   btnCopy.addEventListener('click', async ()=>{
     try{ await navigator.clipboard.writeText(codeTA.value); btnCopy.textContent="복사됨"; setTimeout(()=>btnCopy.textContent="코드 복사",1200); }
     catch{ codeTA.select(); document.execCommand("copy"); btnCopy.textContent="복사됨"; setTimeout(()=>btnCopy.textContent="코드 복사",1200); }
   });
 
-  // ===== 상태 저장/불러오기 =====
-  // 이미지 전체 dataURL 추출(저장용)
+  // ===== 상태 저장/불러오기(모드 포함) =====
   function imageToDataURL(){
     const c=document.createElement('canvas');
     c.width=naturalW; c.height=naturalH;
     const x=c.getContext('2d'); x.drawImage(image,0,0);
-    return c.toDataURL('image/png'); // 원본이 JPEG여도 PNG로 저장(무손실)
+    return c.toDataURL('image/png');
   }
-
   function buildState(){
     return {
-      version: 1,
+      version: 2,
       savedAt: new Date().toISOString(),
-      image: imageToDataURL(),             // dataURL
+      mode: segMode,
+      image: imageToDataURL(),
       naturalWidth: naturalW,
       naturalHeight: naturalH,
-      lines: lines.map(l=>({ type:l.type, perc:l.perc })), // 0~1
+      lines: lines.map(l=>({ type:l.type, perc:l.perc })),
       links: segLinks.slice()
     };
   }
-
   function downloadJSON(obj, filename){
     const blob = new Blob([JSON.stringify(obj,null,2)], {type:'application/json'});
     const url = URL.createObjectURL(blob);
@@ -452,22 +491,26 @@
 
   async function restoreState(state){
     if (!state || !state.image) throw new Error('Invalid state');
-    // 이미지 로드
     await new Promise((resolve,reject)=>{
       image.onload = ()=>{ naturalW=image.naturalWidth; naturalH=image.naturalHeight; stage.style.display='inline-block'; syncOverlaySize(); resolve(); };
       image.onerror = reject;
       image.src = state.image;
     });
 
+    // 모드 반영
+    if (state.mode === 'v' || state.mode === 'h') {
+      segMode = state.mode;
+      document.querySelector(`input[name="mode"][value="${segMode}"]`).checked = true;
+    }
+
     // 선/링크 복원
-    clearLines(); // 기존 제거
+    clearLines();
     state.lines?.forEach(l => createLine(l.type, Math.max(0, Math.min(1, Number(l.perc)||0))));
     segLinks = Array.isArray(state.links) ? state.links.slice() : [];
     updateSegmentsUI(true);
     layoutLines();
     scheduleThumbs();
 
-    // 코드/프리뷰 초기화
     codeTA.value = "";
     preview.innerHTML = "";
     btnGen.disabled = false; btnRegen.disabled = true; btnCopy.disabled = true; btnPreview.disabled = true;

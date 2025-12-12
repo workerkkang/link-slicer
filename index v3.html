@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Link Slicer - Image Line Tool</title>
+<style>
+  body {
+    display: flex;
+    margin: 0;
+    font-family: Arial, sans-serif;
+    height: 100vh;
+  }
+
+  /* 왼쪽 사용법 영역 */
+  #sidebar {
+    width: 260px;
+    background: #f4f4f4;
+    padding: 20px;
+    border-right: 1px solid #ccc;
+    overflow-y: auto;
+  }
+
+  #sidebar h2 {
+    margin-top: 0;
+  }
+
+  /* 메인 작업 영역 */
+  #main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #controls {
+    padding: 10px;
+    border-bottom: 1px solid #ccc;
+    background: #fafafa;
+  }
+
+  #canvas-container {
+    position: relative;
+    flex: 1;
+    overflow: auto;
+    background: #ddd;
+  }
+
+  #uploadedImage {
+    display: block;
+    max-width: none;
+  }
+
+  .line {
+    position: absolute;
+    background: red;
+    cursor: move;
+  }
+
+  .h-line {
+    height: 2px;
+    width: 100%;
+  }
+
+  .v-line {
+    width: 2px;
+    height: 100%;
+  }
+</style>
+</head>
+<body>
+
+<!-- 왼쪽 사용법 설명란 -->
+<div id="sidebar">
+  <h2>📌 사용법 요약</h2>
+  <p>1️⃣ 이미지를 업로드하세요.</p>
+  <p>2️⃣ 이미지 위에서 클릭하여 분할선을 추가합니다.</p>
+  <ul>
+    <li>일반 클릭 → <b>가로선(빨간)</b></li>
+    <li>Shift + 클릭 → <b>세로선(빨간)</b></li>
+    <li>Alt + 클릭 → <b>가까운 선 삭제</b></li>
+  </ul>
+  <p>3️⃣ 선을 드래그하면 위치 이동 가능</p>
+  <p>4️⃣ 오른쪽 위 <b>Export JSON</b> 버튼에서  
+     위치 정보(픽셀/퍼센트) 확인 가능</p>
+</div>
+
+<!-- 메인 영역 -->
+<div id="main">
+  <div id="controls">
+    <input type="file" id="imageInput" accept="image/*" />
+    <button id="exportJsonBtn">Export JSON</button>
+  </div>
+
+  <div id="canvas-container">
+    <img id="uploadedImage" src="" />
+  </div>
+</div>
+
+<script>
+  const container = document.getElementById("canvas-container");
+  const image = document.getElementById("uploadedImage");
+  const imageInput = document.getElementById("imageInput");
+  const exportBtn = document.getElementById("exportJsonBtn");
+
+  let lines = [];
+
+  // 이미지 업로드
+  imageInput.addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    image.src = url;
+  });
+
+  // 이미지 클릭 → 선 생성 / 삭제
+  container.addEventListener("click", e => {
+    if (!image.src) return;
+
+    const rect = container.getBoundingClientRect();
+    const x = e.clientX - rect.left + container.scrollLeft;
+    const y = e.clientY - rect.top + container.scrollTop;
+
+    // Alt 클릭 → 가장 가까운 선 삭제
+    if (e.altKey) {
+      let nearest = null;
+      let nearestDist = Infinity;
+      for (let line of lines) {
+        let dist = 0;
+
+        if (line.type === "h") dist = Math.abs(line.elem.offsetTop - y);
+        else dist = Math.abs(line.elem.offsetLeft - x);
+
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearest = line;
+        }
+      }
+      if (nearest) {
+        nearest.elem.remove();
+        lines = lines.filter(l => l !== nearest);
+      }
+      return;
+    }
+
+    // Shift 클릭 → 세로선 생성
+    if (e.shiftKey) {
+      createLine("v", x);
+      return;
+    }
+
+    // 일반 클릭 → 가로선 생성
+    createLine("h", y);
+  });
+
+  // 선 생성 함수
+  function createLine(type, pos) {
+    const line = document.createElement("div");
+    line.classList.add("line");
+
+    if (type === "h") {
+      line.classList.add("h-line");
+      line.style.top = pos + "px";
+      line.style.left = "0px";
+    } else {
+      line.classList.add("v-line");
+      line.style.left = pos + "px";
+      line.style.top = "0px";
+    }
+
+    container.appendChild(line);
+
+    const lineObj = { type, elem: line };
+    lines.push(lineObj);
+
+    // 드래그 이동 기능
+    line.addEventListener("mousedown", e => {
+      e.preventDefault();
+      const startY = e.clientY;
+      const startX = e.clientX;
+      const startTop = line.offsetTop;
+      const startLeft = line.offsetLeft;
+
+      function onMove(ev) {
+        if (type === "h") {
+          line.style.top = startTop + (ev.clientY - startY) + "px";
+        } else {
+          line.style.left = startLeft + (ev.clientX - startX) + "px";
+        }
+      }
+
+      function onUp() {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      }
+
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    });
+  }
+
+  // JSON Export
+  exportBtn.addEventListener("click", () => {
+    if (!image.src) return;
+
+    const imgWidth = image.width;
+    const imgHeight = image.height;
+
+    const result = lines.map(l => {
+      const px = l.type === "h" ? l.elem.offsetTop : l.elem.offsetLeft;
+      const percent = l.type === "h"
+        ? (px / imgHeight) * 100
+        : (px / imgWidth) * 100;
+
+      return {
+        type: l.type,
+        pixel: px,
+        percent: percent.toFixed(2)
+      };
+    });
+
+    alert(JSON.stringify(result, null, 2));
+  });
+</script>
+
+</body>
+</html>

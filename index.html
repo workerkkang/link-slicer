@@ -4,16 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>이미지 분할 링크 생성기</title>
+  <!-- favicon 404 방지 -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>">
   <style>
-    :root { --bg:#0b0c10; --panel:#121318; --muted:#9aa1a9; --acc:#4aa3ff; --border:#222630; }
-    *{box-sizing:border-box} body{margin:0;font-family:system-ui,Segoe UI,Roboto,Apple SD Gothic Neo,Pretendard,sans-serif;background:var(--bg);color:#e8ecf1}
+    :root { --bg:#0b0c10; --panel:#121318; --muted:#9aa1a9; --border:#222630; }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,Segoe UI,Roboto,Apple SD Gothic Neo,Pretendard,sans-serif;background:var(--bg);color:#e8ecf1}
     .wrap{max-width:1100px;margin:0 auto;padding:24px}
-    h1{font-size:22px;margin:0 0 12px} p,li,label,small{color:#cbd3db}
+    h1{font-size:22px;margin:0 0 12px}
+    p,li,label,small{color:#cbd3db}
     .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:18px}
     .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
     .imgStage{position:relative;display:inline-block;max-width:100%;border:1px dashed #394050;border-radius:8px;background:#0f1216}
     .imgStage img{max-width:100%;display:block}
-    .line{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent, #6ee7ff 30%, #0ff 50%, #6ee7ff 70%, transparent);cursor:ns-resize}
+    .line{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#6ee7ff 30%,#0ff 50%,#6ee7ff 70%,transparent);cursor:ns-resize}
     .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:#0f1216;color:#c3cbd4}
     .muted{color:var(--muted)}
     .controls{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
@@ -21,9 +25,9 @@
     button.primary{background:linear-gradient(180deg,#2b7cff,#1d5fd6);border-color:#2b67ff}
     button:disabled{opacity:.5;cursor:not-allowed}
     input[type="file"]{display:inline-block}
-    input[type="url"], input[type="text"]{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0f1216;color:#e8ecf1}
+    input[type="url"],input[type="text"]{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0f1216;color:#e8ecf1}
     .rows{display:flex;flex-direction:column;gap:12px;max-height:420px;overflow:auto;padding-right:6px}
-    .row{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+    .row{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center}
     .row small{opacity:.8}
     .hr{height:1px;background:var(--border);margin:14px 0}
     textarea{width:100%;min-height:180px;border-radius:10px;border:1px solid var(--border);background:#0f1216;color:#e8ecf1;padding:10px}
@@ -32,9 +36,43 @@
     .pill{display:inline-block;background:#12233b;color:#a5ceff;border:1px solid #214a7d;border-radius:999px;padding:4px 8px;font-size:12px}
     .footer{margin-top:18px;color:#91a0ae}
     .note{background:#0f1216;border:1px solid var(--border);padding:10px;border-radius:10px}
+    @media (max-width: 900px){ .grid{grid-template-columns:1fr} }
+
+    /* ===== 왼쪽 고정 '사용법 요약' 박스 ===== */
+    /* 반드시 <body> 바로 다음에 오는 #helpBox 요소에 적용됩니다 */
+    #helpBox{
+      position: fixed;                 /* 스크롤해도 고정 */
+      inset: 84px auto auto 12px;      /* top:84px; left:12px */
+      width: 260px;
+      padding: 14px 16px;
+      background: #121318;
+      border: 2px solid #3a78ff;       /* 시인성 높은 테두리(원하면 1px로 변경하세요) */
+      border-radius: 12px;
+      color: #e8ecf1;
+      font-size: 13px; line-height: 1.55;
+      box-shadow: 0 8px 20px rgba(0,0,0,.45);
+      z-index: 2147483647;             /* 최상단 고정 */
+    }
+    #helpBox b{color:#70b0ff}
+    @media (max-width: 1200px){
+      /* 화면이 좁을 때 살짝 안쪽으로 */
+      #helpBox{ inset: 72px auto auto 8px; width: 230px; }
+    }
   </style>
 </head>
 <body>
+
+<!-- 고정 요약 박스: 반드시 <body> 바로 아래 위치해야 합니다 -->
+<div id="helpBox">
+  <b>사용법 요약</b><br/>
+  ① <b>파일 선택</b>으로 이미지 업로드<br/>
+  ② 이미지 위 <b>클릭</b> → 분할선 추가<br/>
+  ③ <kbd>Alt</kbd>+클릭 → 해당 분할선 삭제<br/>
+  ④ 각 조각 <b>링크(URL)</b> 입력<br/>
+  ⑤ <b>코드 생성</b> → HTML 생성<br/>
+  ⑥ <b>코드 복사</b> → 원하는 곳에 붙여넣기
+</div>
+
 <div class="wrap">
   <h1>이미지 분할 링크 생성기</h1>
   <p class="muted">이미지 위를 클릭해 <b>가로 분할선</b>을 추가하고, 각 조각에 <b>개별 링크</b>를 넣어 HTML을 생성하세요.</p>
@@ -42,9 +80,7 @@
   <div class="grid">
     <!-- Left: editor -->
     <div class="card">
-      <div class="badge">
-        <span>1</span><span>이미지 업로드</span>
-      </div>
+      <div class="badge"><span>1</span><span>이미지 업로드</span></div>
       <div class="controls">
         <input id="file" type="file" accept="image/*" />
         <button id="reset">초기화</button>
@@ -53,31 +89,28 @@
       <div style="height:12px"></div>
       <div id="stage" class="imgStage">
         <img id="img" alt="preview" style="display:none" />
-        <!-- cut lines will be injected here -->
       </div>
       <div class="hint" style="margin-top:8px">
-        • 클릭: 분할선 추가 • Alt/Option+클릭: 가장 가까운 분할선 삭제 • 드래그: 분할선 이동
+        • 클릭: 분할선 추가 • Alt/Option+클릭: 삭제 • 드래그: 이동
       </div>
 
       <div class="hr"></div>
 
-      <div class="badge">
-        <span>2</span><span>각 조각 링크 입력</span>
-      </div>
+      <div class="badge"><span>2</span><span>각 조각 링크 입력</span></div>
       <div id="rows" class="rows"></div>
 
       <div class="hr"></div>
 
-      <div class="badge">
-        <span>3</span><span>코드 생성 & 미리보기</span>
-      </div>
+      <div class="badge"><span>3</span><span>코드 생성 & 미리보기</span></div>
       <div class="controls">
         <button id="gen" class="primary" disabled>코드 생성</button>
         <button id="copy" disabled>코드 복사</button>
       </div>
       <div style="height:10px"></div>
       <textarea id="code" placeholder="생성된 HTML 코드가 여기에 표시됩니다." readonly></textarea>
-      <div class="footer">이 코드는 뉴스레터/블로그에 그대로 붙여넣을 수 있습니다. 일부 이메일 클라이언트에서는 data URL이 차단될 수 있으니 필요 시 이미지 호스팅을 변경하세요.</div>
+      <div class="footer">
+        이 코드는 뉴스레터/블로그에 그대로 붙여넣을 수 있습니다. 일부 이메일 클라이언트에서는 data URL이 차단될 수 있으니 필요 시 이미지 호스팅을 변경하세요.
+      </div>
     </div>
 
     <!-- Right: live preview -->
@@ -87,9 +120,9 @@
       <div class="hr"></div>
       <div class="note">
         <b>팁</b><br/>
-        • 분할선은 원본 해상도 기준으로 저장되어, 업로드한 원본의 세로 길이에 따라 픽셀이 정확히 잘립니다.<br/>
+        • 분할선은 원본 해상도 기준으로 저장됩니다.<br/>
         • “코드 생성” 시 각 조각을 canvas로 잘라 <code>&lt;img src="data:..."&gt;</code>로 만듭니다.<br/>
-        • 호환성(일부 이메일 클라이언트) 문제 시, 생성된 이미지를 서버에 업로드해 <code>src</code>를 URL로 바꾸세요.
+        • 이메일 호환성 이슈 시, 생성 이미지를 서버에 업로드하고 <code>src</code>를 URL로 교체하세요.
       </div>
     </div>
   </div>
@@ -108,11 +141,11 @@
   const preview = $("#preview");
   const resetBtn = $("#reset");
 
-  let original = null;        // Image bitmap
+  let original = null;        // ImageBitmap
   let naturalW = 0, naturalH = 0;
-  let cuts = [];              // y positions in original pixel space (0..naturalH), excluding 0 and naturalH
-  let dragging = null;        // { idx, offset } when dragging a line
-  let segmentLinks = [];      // array of href strings per segment
+  let cuts = [];              // y-positions (0..naturalH)
+  let dragging = null;        // { idx, startY, startVal }
+  let segmentLinks = [];
 
   function clearAll() {
     cuts = [];
@@ -122,7 +155,6 @@
     codeTA.value = "";
     copyBtn.disabled = true;
     genBtn.disabled = !original;
-    // remove cut lines
     stage.querySelectorAll('.line').forEach(el => el.remove());
   }
 
@@ -142,7 +174,6 @@
     if (!f) return;
     const url = URL.createObjectURL(f);
     img.onload = async () => {
-      // Create ImageBitmap to preserve original pixels
       original = await createImageBitmap(f);
       naturalW = original.width;
       naturalH = original.height;
@@ -153,25 +184,23 @@
     img.src = url;
   });
 
-  // Helpers to convert between displayed Y and original Y
-  function displayToOriginalY(displayY) {
+  // Helpers: display <-> original coords
+  function displayToOriginalY(displayClientY) {
     const rect = img.getBoundingClientRect();
     const ratio = naturalH / rect.height;
-    return Math.round((displayY - rect.top + window.scrollY) * ratio);
+    return Math.round((displayClientY - rect.top) * ratio);
   }
   function originalToDisplayY(origY) {
     const rect = img.getBoundingClientRect();
     const ratio = rect.height / naturalH;
-    return rect.top + window.scrollY + origY * ratio;
+    return rect.top + origY * ratio;
   }
 
   function renderLines() {
-    // remove old
     stage.querySelectorAll('.line').forEach(el => el.remove());
-    // create lines
     const rect = img.getBoundingClientRect();
     cuts.forEach((y, idx) => {
-      const top = originalToDisplayY(y) - rect.top - window.scrollY;
+      const top = originalToDisplayY(y) - rect.top;
       const line = document.createElement('div');
       line.className = 'line';
       line.style.top = `${top - 1}px`;
@@ -186,17 +215,19 @@
     });
   }
 
-  // Add/remove line by click
+  // Click to add/remove cut
   stage.addEventListener('click', (ev) => {
-    if (!original || ev.target !== stage) return;
+    if (!original) return;
+
     const rect = img.getBoundingClientRect();
-    const insideY = ev.clientY >= rect.top && ev.clientY <= rect.bottom;
-    if (!insideY) return;
+    const inside =
+      ev.clientX >= rect.left && ev.clientX <= rect.right &&
+      ev.clientY >= rect.top  && ev.clientY <= rect.bottom;
+    if (!inside) return;
 
     const origY = displayToOriginalY(ev.clientY);
 
     if (ev.altKey) {
-      // remove nearest
       if (cuts.length === 0) return;
       const nearestIdx = cuts.reduce((bi, v, i, a) =>
         Math.abs(v - origY) < Math.abs(a[bi] - origY) ? i : bi, 0);
@@ -210,7 +241,7 @@
     renderLines();
   });
 
-  // Dragging lines
+  // Drag lines
   window.addEventListener('mousemove', (ev) => {
     if (!dragging) return;
     const dy = ev.clientY - dragging.startY;
@@ -221,12 +252,11 @@
     cuts[dragging.idx] = newVal;
     cuts.sort((a,b)=>a-b);
     renderLines();
-    updateSegments(false); // do not reset links while dragging
+    updateSegments(false); // keep links
   });
   window.addEventListener('mouseup', ()=> dragging=null);
 
   function getSegments() {
-    // boundaries: 0, ...cuts..., naturalH
     const bounds = [0, ...cuts, naturalH];
     const segs = [];
     for (let i=0;i<bounds.length-1;i++){
@@ -239,7 +269,6 @@
     const segs = getSegments();
     const prev = segmentLinks.slice();
     segmentLinks = segs.map((_, i) => resetLinks ? "" : (prev[i] ?? ""));
-    // Rows UI
     rows.innerHTML = "";
     segs.forEach((s, i) => {
       const row = document.createElement('div');
@@ -247,7 +276,6 @@
       row.innerHTML = `
         <small>조각 ${i+1} <span class="muted">(${s.height}px)</span></small>
         <input type="url" placeholder="https:// 링크를 입력하세요" value="${segmentLinks[i]??""}" />
-        <button data-del="${i}" title="이 조각을 기준으로 분할선 삭제/재배치하는 것이 아니라면 삭제 불가" disabled>삭제</button>
       `;
       const input = row.querySelector('input');
       input.addEventListener('input', (e) => {
@@ -256,7 +284,7 @@
       rows.appendChild(row);
     });
     genBtn.disabled = !original || segs.length === 0;
-    preview.innerHTML = ""; // defer until generate
+    preview.innerHTML = "";
     codeTA.value = "";
     copyBtn.disabled = true;
   }
@@ -272,28 +300,19 @@
     for (const s of segs) {
       canv.height = s.height;
       ctx.clearRect(0,0,canv.width,canv.height);
-      // drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh)
       ctx.drawImage(original, 0, s.top, naturalW, s.height, 0, 0, naturalW, s.height);
-      const url = canv.toDataURL('image/png');
-      dataURLs.push(url);
+      dataURLs.push(canv.toDataURL('image/png'));
     }
 
-    // Build HTML code: stack of <a><img/></a>
     const pieces = dataURLs.map((src, i) => {
       const href = segmentLinks[i] || "#";
-      // alt/utm은 필요 시 편집
       return `<a href="${href}" target="_blank" style="display:block;line-height:0;"><img src="${src}" alt="slice-${i+1}" style="display:block;width:100%;height:auto;border:0;"/></a>`;
     }).join("\n");
 
-    const html = `<!-- Generated by Image Link Slicer -->
-<div style="max-width:800px;margin:0 auto;">
-${pieces}
-</div>`;
-
-    codeTA.value = html;
+    codeTA.value = `<!-- Generated by Image Link Slicer -->\n<div style="max-width:800px;margin:0 auto;">\n${pieces}\n</div>`;
     copyBtn.disabled = false;
 
-    // Live preview
+    // live preview
     preview.innerHTML = "";
     dataURLs.forEach((src, i) => {
       const a = document.createElement('a');
@@ -318,14 +337,14 @@ ${pieces}
       copyBtn.textContent = "복사됨";
       setTimeout(()=>copyBtn.textContent="코드 복사", 1200);
     } catch {
-      // fallback
-      codeTA.select(); document.execCommand("copy");
+      codeTA.select();
+      document.execCommand("copy");
       copyBtn.textContent = "복사됨";
       setTimeout(()=>copyBtn.textContent="코드 복사", 1200);
     }
   });
 
-  // Re-render lines on resize/scroll (keeps alignment)
+  // keep line alignment on resize/scroll
   const rerender = () => original && renderLines();
   window.addEventListener('resize', rerender);
   window.addEventListener('scroll', rerender, { passive:true });
